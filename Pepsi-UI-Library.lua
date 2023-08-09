@@ -1,6 +1,6 @@
 --[[ Pepsi's UI Library
 Better and updated web-based docs are planned in distant future.
-Library v0.36 [
+Library v0.37 [
     CreateWindow: Function (
         (table | nil) Options [
             (string | nil) Name = "Window Name"
@@ -461,7 +461,7 @@ Library v0.36 [
 ]
 ]]
 local library = {
-	Version = "0.36",
+	Version = "0.37",
 	WorkspaceName = "Pepsi Lib",
 	flags = {},
 	signals = {},
