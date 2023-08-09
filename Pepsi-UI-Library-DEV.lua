@@ -103,7 +103,7 @@ end
 
 
 local library = {
-	Version = "0.36", -- https://api.roblox.com/assets/7657867786/versions
+	Version = "0.37", -- https://api.roblox.com/assets/7657867786/versions
 	WorkspaceName = "Pepsi Lib",
 	flags = {},
 	signals = {},
