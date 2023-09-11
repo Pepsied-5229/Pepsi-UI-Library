@@ -1,6 +1,6 @@
 --[[ Pepsi's UI Library
 Better and updated web-based docs are planned in distant future.
-Library v0.37 [
+Library v0.36 [
     CreateWindow: Function (
         (table | nil) Options [
             (string | nil) Name = "Window Name"
@@ -178,8 +178,12 @@ Library v0.37 [
                     (table) Options [
                         (string) Name = "Button Name"
                         (function | nil) Callback = Function (NumPresses)
-						(boolean | nil) Locked = true or false
+                        (function | nil) MouseEnterCallback = Function (NumPresses)
+                        (function | nil) MouseLeaveCallback = Function (NumPresses)
+                        (function | nil) CallbackRight = Function (NumPresses)
+                        (function | nil) ConditionRight = Function (NumPresses)
 						(function | nil) Condition = Function (NumPresses) // Will only allow the button to be pressed, if this function returns true
+						(boolean | nil) Locked = true or false
                     ]
                     (table | nil) Options ...
                 ) -> Buttons [
@@ -471,7 +475,7 @@ local library = {
 	subs = {},
 	colored = {},
 	configuration = {
-		hideKeybind = Enum.KeyCode.RightShift,
+		hideKeybind = shared.force_toggle_gui_keybind or Enum.KeyCode.RightShift,
 		smoothDragging = false,
 		easingStyle = Enum.EasingStyle.Quart,
 		easingDirection = Enum.EasingDirection.Out
@@ -504,7 +508,7 @@ local library = {
 			return c
 		end
 		x, c = pcall(function()
-			return (game:IsLoaded() or (game.Loaded:Wait() or 1)) and game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+			return (game:IsLoaded() or (game.Loaded:Wait() or true)) and game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
 		end)
 		if x and c then
 			return c
@@ -527,8 +531,9 @@ library.Subs = library.subs
 local library_flags = library.flags
 library.Flags = library_flags
 local destroyrainbows, destroyrainbowsg
-function darkenColor(clr, intensity)
-	if not intensity or (intensity == 1) then
+local function darkenColor(clr, intensity)
+	if intensity and (intensity ~= 1) then
+	else
 		return clr
 	end
 	if clr and ((typeof(clr) == "Color3") or (type(clr) == "table")) then
@@ -592,7 +597,7 @@ library.resolvercache = resolvercache
 local function resolveid(image, flag)
 	if image then
 		if type(image) == "string" then
-			if (#image > 14 and string.sub(image, 1, 13) == "rbxassetid://") or (#image > 12 and string.sub(image, 1, 11) == "rbxasset://") or (#image > 12 and string.sub(image, 1, 11) ~= "rbxthumb://") then
+			if ((#image > 14) and (string.sub(image, 1, 13) == "rbxassetid://")) or ((#image > 12) and (string.sub(image, 1, 11) == "rbxasset://")) or ((#image > 12) and (string.sub(image, 1, 11) ~= "rbxthumb://")) then
 				if flag then
 					local thing = library.elements[flag] or library.designerelements[flag]
 					if thing and thing.Set then
@@ -617,12 +622,13 @@ local function resolveid(image, flag)
 			local typ = type(image)
 			if typ == "string" then
 				if getsynasset then
-					if #image > 11 and (string.sub(image, 1, 11) == "synasset://") then
+					if (#image > 11) and (string.sub(image, 1, 11) == "synasset://") then
 						return getsynasset(string.sub(image, 12))
+					elseif shared.no_http_assets then
 					elseif (#image > 14) and (string.sub(image, 1, 14) == "synasseturl://") then
 						local x, e = pcall(function()
 							local codename, fixes = string.gsub(image, ".", function(c)
-								if c:lower() == c:upper() and not tonumber(c) then
+								if (c:lower() == c:upper()) and not tonumber(c) then
 									return ""
 								end
 							end)
@@ -642,20 +648,28 @@ local function resolveid(image, flag)
 							else
 								makefolder("./Pepsi Lib Themes/SynapseAssetsCache")
 							end
-							if not fold or not isfile("./Pepsi Lib/Themes/SynapseAssetsCache/" .. codename .. ".dat") then
-								local res = game:HttpGet(string.sub(image, 15))
+							if fold and isfile("./Pepsi Lib/Themes/SynapseAssetsCache/" .. codename .. ".dat") then
+							else
+								if shared.no_http_assets then
+									image = nil
+									do
+										return error("User has HTTP assets disabled.")
+									end
+									return (error("Attempt to bypass user HTTP preference"))(#-wot)
+								end
+								local res = shared.no_http_assets or game:HttpGet(string.sub(image, 15))
 								if res ~= nil then
 									writefile("./Pepsi Lib/Themes/SynapseAssetsCache/" .. codename .. ".dat", res)
 								end
 							end
 							return getsynasset(readfile("./Pepsi Lib/Themes/SynapseAssetsCache/" .. codename .. ".dat"))
 						end)
-						if x and e ~= nil then
+						if x and (e ~= nil) then
 							return e
 						end
 					end
 				end
-				if (#image < 11) or ((string.sub(image, 1, 13) ~= "rbxassetid://") and (string.sub(image, 1, 11) ~= "rbxasset://") and string.sub(image, 1, 11) ~= "rbxthumb://") then
+				if (#image < 11) or ((string.sub(image, 1, 13) ~= "rbxassetid://") and (string.sub(image, 1, 11) ~= "rbxasset://") and (string.sub(image, 1, 11) ~= "rbxthumb://")) then
 					image = tonumber(image:gsub("%D", ""), 10) or image
 					typ = type(image)
 				end
@@ -664,7 +678,7 @@ local function resolveid(image, flag)
 				pcall(function()
 					local nfo = Marketplace and Marketplace:GetProductInfo(image)
 					image = tostring(image)
-					if nfo and nfo.AssetTypeId == 1 then
+					if nfo and (nfo.AssetTypeId == 1) then
 						image = "rbxassetid://" .. image
 					elseif nfo.AssetTypeId == 13 then
 						local decal = game:GetObjects("rbxassetid://" .. image)[1]
@@ -693,12 +707,126 @@ local function resolveid(image, flag)
 end
 library.subs.ResolveID = resolveid
 library.resolvercache = resolvercache
+local GetPath
+do
+	local HTTP = game:GetService("HttpService")
+	function GetPath(Object)
+		local RealName = ""
+		for _ = 1, 42 do
+			local Terminal
+			local Parent = Object.Parent
+			local Name
+			if Parent then
+				if Parent == game then
+					Name = Object.ClassName
+					Terminal = true
+				end
+			else
+				Name = "NIL"
+				Terminal = true
+			end
+			RealName = `][|+|{Name or Object.Name}][|-|{RealName}`
+			Object = Parent
+			if Terminal then
+				break
+			end
+		end
+		return HTTP:UrlEncode(RealName)
+	end
+	library.subs.GetPath = GetPath
+	library.GetPath = GetPath
+end
+local ResolvePath
+do
+	local function UnHexCharacters(Characters)
+		return string.char(tonumber(Characters, 16))
+	end
+	local function NilPatch()
+		return getnilinstances()
+	end
+	function ResolvePath(RealName)
+		RealName = string.gsub(RealName, "%%(%x%x)", UnHexCharacters)
+		local Names = {}
+		for Segment in string.gmatch(RealName, "%]%[|%+|(.-)%]%[|%-|") do
+			Names[1 + #Names] = Segment
+		end
+		local Name = Names[1]
+		local Object
+		if Name == "NIL" then
+			if getnilinstances then
+				Object = {
+					GetChildren = NilPatch
+				}
+			else
+				return
+			end
+		else
+			Object = game:GetService(Name) or game:FindFirstChildOfClass(Name) or game:FindFirstChildWhichIsA(Name) or game:FindFirstChild(Name)
+		end
+		for Index, Name in next, Names, 1 do
+			local NextName = Names[1 + Index]
+			for _, Child in next, Object:GetChildren() do
+				if Child.Name == Name then
+					if NextName then
+						if Child:FindFirstChild(NextName) then
+						else
+							continue
+						end
+						local Fail
+						for _, FutureName in next, Names, Index + 1 do
+							if Child:FindFirstChild(FutureName, true) then
+							else
+								Fail = true
+								break
+							end
+						end
+						if Fail then
+							continue
+						end
+					end
+					Object = Child
+				end
+			end
+			if Object then
+			else
+				break
+			end
+		end
+		return Object
+	end
+	library.subs.ResolvePath = ResolvePath
+	library.ResolvePath = ResolvePath
+end
+local function ResolveDropdownItemName(multiselect, passed_multiselect, Name, selectedOption, flagName, blankstring)
+	local resolvedstr = "Select Item"
+	if multiselect then
+		resolvedstr = "Select Item(s)"
+		if passed_multiselect == "string" then
+			return passed_multiselect
+		end
+		Name = blankstring or selectedOption
+	end
+	if selectedOption and (type(selectedOption) ~= "table") then
+		resolvedstr = tostring(selectedOption)
+	else
+		local val = library_flags[flagName]
+		if (val ~= nil) and (type(val) ~= "table") then
+			return tostring(val)
+		elseif blankstring and (type(blankstring) == "string") then
+			resolvedstr = blankstring
+		elseif Name and (type(Name) == "string") then
+			return Name
+		end
+	end
+	return resolvedstr or "Select Item"
+end
 local colored, colors = library.colored, library.colors
+local WhiteColor3 = Color3.new(1, 1, 1)
 local tweenService = game:GetService("TweenService")
 local updatecolors, MainScreenGui
 do
 	local MayGC = 0
-	spawn(function()
+	task.spawn(function()
 		local IsDescendantOf = game.IsDescendantOf
 		local RemoveTable = table.remove
 		while wait_check() do
@@ -765,17 +893,17 @@ do
 		local cclr = colors[data[3]]
 		local darkness = data[4]
 		tweenService:Create(data[1], TweenInfo.new(tweenit, library.configuration.easingStyle, library.configuration.easingDirection), {
-			[data[2]] = (darkness and darkness ~= 1 and darkenColor(cclr, darkness)) or cclr
+			[data[2]] = (darkness and (darkness ~= 1) and darkenColor(cclr, darkness)) or cclr
 		}):Play()
 	end
 	local function colordarktwee(data)
 		local cclr = colors[data[3]]
 		local darkness = data[4]
-		data[1][data[2]] = (darkness and darkness ~= 1 and darkenColor(cclr, darkness)) or cclr
+		data[1][data[2]] = (darkness and (darkness ~= 1) and darkenColor(cclr, darkness)) or cclr
 	end
 	function updatecolors(tweenit)
 		MayGC += 1
-		if library.objects and (#library.objects > 0 or next(library.objects)) then
+		if library.objects and ((#library.objects > 0) or next(library.objects)) then
 			for _, data in next, colored do
 				local x, e
 				if tweenit then
@@ -783,8 +911,9 @@ do
 				end
 				if x then
 				else
-					local x, e = pcall(colordarktwee, data)
-					if e and not x then
+					x, e = pcall(colordarktwee, data)
+					if x then
+					elseif e then
 						warn(debug.traceback(e))
 					end
 				end
@@ -793,7 +922,7 @@ do
 				if library.Backdrop then
 					library.Backdrop.Visible = library_flags["__Designer.Background.UseBackgroundImage"] and true
 					library.Backdrop.Image = resolveid(library_flags["__Designer.Background.ImageAssetID"], "__Designer.Background.ImageAssetID") or ""
-					library.Backdrop.ImageColor3 = library_flags["__Designer.Background.ImageColor"] or Color3.new(1, 1, 1)
+					library.Backdrop.ImageColor3 = library_flags["__Designer.Background.ImageColor"] or WhiteColor3
 					library.Backdrop.ImageTransparency = (library_flags["__Designer.Background.ImageTransparency"] or 95) / 100
 				end
 			end)
@@ -879,10 +1008,9 @@ local keyHandler = {
 		[Enum.KeyCode.Backquote] = "`"
 	}
 }
-local SeverAllConnections
-function SeverAllConnections(t, cache)
+local function SeverAllConnections(t, cache)
 	cache = cache or {}
-	for k, v in next, t do
+	for k, v in next, t or {} do
 		t[k] = nil
 		if v ~= nil then
 			if cache[v] then
@@ -906,8 +1034,9 @@ library.Subs.SeverAllConnections = SeverAllConnections
 local function hardunload(library)
 	if library.UnloadCallback and (type(library.UnloadCallback) == "function") then
 		local x, e = pcall(library.UnloadCallback)
-		if not x and e then
-			task.spawn(error, e, 2)
+		if x then
+		else
+			task.spawn(error, e or "error with unloadcallback", 2)
 		end
 	end
 	for cflag, data in next, elements do
@@ -917,7 +1046,8 @@ local function hardunload(library)
 			end
 			if data.Options.UnloadFunc then
 				local y, u = pcall(data.Options.UnloadFunc)
-				if not y and u then
+				if y then
+				elseif u then
 					warn(debug.traceback("Error unloading '" .. tostring(cflag) .. "'\n" .. u))
 				end
 			end
@@ -935,14 +1065,15 @@ local function unloadall()
 	if shared.libraries then
 		local b = 50
 		while #shared.libraries > 0 do
-			b = b - 1
+			b -= 1
 			if b < 0 then
 				b = 50
 				wait(warn("Looped 50 times while unloading....?"))
 			end
 			local v = shared.libraries[1]
 			if v and v.unload and (type(v.unload) == "function") then
-				if not pcall(v.unload) then
+				if pcall(v.unload) then
+				else
 					pcall(hardunload, v)
 					for k in next, v do
 						v[k] = nil
@@ -963,6 +1094,7 @@ end
 shared.unloadall = unloadall
 library.unloadall = unloadall
 shared.libraries[1 + #shared.libraries] = library
+shared.latest_library = library
 function library.unload()
 	__runscript = nil
 	hardunload(library)
@@ -976,10 +1108,16 @@ function library.unload()
 			end
 		end
 		if shared.libraries and (#shared.libraries == 0) then
-			shared.libraries = nil
+			shared.libraries, shared.latest_library = nil
 		end
 	end
-	warn("Unloaded")
+	if (library ~= shared.latest_library) or next(shared.latest_library) then
+	else
+		shared.latest_library = nil
+	end
+	if library and next(library) then
+		warn("Unloaded", library)
+	end
 end
 library.Unload = library.unload
 local Instance_new = (syn and syn.protect_gui and function(...)
@@ -1019,14 +1157,14 @@ local function getresolver(listt, filter, method, _)
 			end
 			if hardtype == "Instance" then
 				local lastg = g
-				if method == nil and listt == playersservice then
+				if (method == nil) and (listt == playersservice) then
 					g = listt:GetPlayers()
 				end
 				if method then
 					local metype = type(method)
 					if metype == "table" then
 						method = method.Method or method[1]
-						args = method.Args or method.Arguments or unpack(method, (method.Method ~= nil and 1) or 2)
+						args = method.Args or method.Arguments or unpack(method, ((method.Method ~= nil) and 1) or 2)
 						metype = type(method)
 					end
 					local y, u
@@ -1070,7 +1208,7 @@ local function getresolver(listt, filter, method, _)
 				for _, v in next, g do
 					local x, e = pcall(filter, v)
 					if x and e then
-						accept[1 + #accept] = (e == true and v) or e
+						accept[1 + #accept] = ((e == true) and v) or e
 					end
 				end
 				g = accept
@@ -1096,7 +1234,8 @@ local function getresolver(listt, filter, method, _)
 					for _, v in next, g do
 						if not table.find(filter, v) and not table.find(filter, tostring(v)) then
 							accept[1 + #accept] = v
-						elseif not filter[0] then
+						elseif filter[0] then
+						else
 							accept[1 + #accept] = v
 						end
 					end
@@ -1128,7 +1267,8 @@ library.Players = playersservice
 library.UserInputService = userInputService
 library.RunService = runService
 local mouse = LP and LP:GetMouse()
-if not mouse and PluginManager and runService:IsStudio() then
+if mouse then
+elseif PluginManager and runService:IsStudio() then
 	shared.library_plugin = shared.library_plugin or print("Creating Studio Test-Plugin...") or PluginManager():CreatePlugin()
 	mouse = shared.library_plugin:GetMouse()
 	library.plugin = shared.library_plugin
@@ -1173,15 +1313,19 @@ local isDraggingSomething = false
 local function makeDraggable(topBarObject, object)
 	local dragging, startPosition, dragStart, dragInput
 	library.signals[1 + #library.signals] = topBarObject.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		if (input.UserInputType == Enum.UserInputType.MouseButton1) or (input.UserInputType == Enum.UserInputType.Touch) then
 			dragging = true
 			dragStart = input.Position
 			startPosition = object.Position
-			input.Changed:Connect(function()
+			local endsig
+			endsig = input.Changed:Connect(function()
 				if input.UserInputState == Enum.UserInputState.End then
 					dragging = false
+					endsig:Disconnect()
+					endsig = nil
 				end
 			end)
+			library.signals[1 + #library.signals] = endsig
 		end
 	end)
 	library.signals[1 + #library.signals] = topBarObject.InputChanged:Connect(function(input)
@@ -1196,7 +1340,8 @@ local function makeDraggable(topBarObject, object)
 				tweenService:Create(object, TweenInfo.new(0.25, library.configuration.easingStyle, library.configuration.easingDirection), {
 					Position = UDim2.new(startPosition.X.Scale, startPosition.X.Offset + delta.X, startPosition.Y.Scale, startPosition.Y.Offset + delta.Y)
 				}):Play()
-			elseif not isDraggingSomething and not library.configuration.smoothDragging then
+			elseif isDraggingSomething or library.configuration.smoothDragging then
+			else
 				object.Position = UDim2.new(startPosition.X.Scale, startPosition.X.Offset + delta.X, startPosition.Y.Scale, startPosition.Y.Offset + delta.Y)
 			end
 		end
@@ -1236,7 +1381,7 @@ do
 				return replace
 			end
 		end)
-		return (default and corrections == #predname and tostring(default)) or predname
+		return (default and (corrections == #predname) and tostring(default)) or predname
 	end
 	library.subs.ConvertFilename = convertfilename
 end
@@ -1287,7 +1432,7 @@ do
 			Border_2.Position = UDim2ScaleHalf
 			Border_2.Size = UDim2ScaleOne
 			Text.AnchorPoint = Vector2Half
-			Text.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+			Text.BackgroundColor3 = WhiteColor3
 			Text.BackgroundTransparency = 1
 			Text.Font = Enum.Font.Code
 			Text.FontSize = Enum.FontSize.Size14
@@ -1299,7 +1444,7 @@ do
 			colored[1 + #colored] = {Text, "TextColor3", "elementText"}
 			Text.TextSize = 14
 			Text.TextStrokeTransparency = 0.75
-			Button.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+			Button.BackgroundColor3 = WhiteColor3
 			Button.BackgroundTransparency = 1
 			Button.BorderSizePixel = 0
 			Button.Font = Enum.Font.SourceSans
@@ -1417,10 +1562,13 @@ do
 					local Proxy
 					do
 						local nCallback = (Enabled and (OptionData.Callback or OptionData.OnPressed or OptionData.Function)) or nil
-						if not Proxy or Callback ~= nCallback then
+						if Proxy and (Callback == nCallback) then
+						else
 							Callback = nCallback
 							Proxy = Clicked(Callback)
-							OptionObj.PressedConnection = (OptionObj.PressedConnection and OptionObj.PressedConnection:Disconnect() and nil) or (Callback and OptionObj.Pressed:Connect(Proxy)) or nil
+							local newsig = (OptionObj.PressedConnection and OptionObj.PressedConnection:Disconnect() and nil) or (Callback and OptionObj.Pressed:Connect(Proxy)) or nil
+							OptionObj.PressedConnection = newsig
+							library.signals[1 + #library.signals] = newsig
 						end
 						local PC = OptionObj.PressedConnection
 						if Enabled then
@@ -1431,7 +1579,9 @@ do
 								end
 							elseif Callback then
 								Proxy = Proxy or Clicked(Callback)
-								OptionObj.PressedConnection = OptionObj.Pressed:Connect(Proxy)
+								local newsig = OptionObj.Pressed:Connect(Proxy)
+								OptionObj.PressedConnection = newsig
+								library.signals[1 + #library.signals] = newsig
 							end
 						elseif PC then
 							OptionObj.PressedConnection = (PC:Disconnect() and nil) or nil
@@ -1527,7 +1677,7 @@ do
 				Splitter.Parent = InnerBorder
 				Splitter.Position = UDim2.new(0, 0, 1, -35)
 				Splitter.Size = UDim2.new(1, 0, 0, 1)
-				Title.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				Title.BackgroundColor3 = WhiteColor3
 				Title.BackgroundTransparency = 1
 				Title.Font = Enum.Font.Code
 				Title.FontSize = Enum.FontSize.Size18
@@ -1539,7 +1689,7 @@ do
 				Title.TextSize = 15
 				Title.TextStrokeTransparency = 0.95
 				Title.TextXAlignment = Enum.TextXAlignment.Left
-				Description.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				Description.BackgroundColor3 = WhiteColor3
 				Description.BackgroundTransparency = 1
 				Description.Font = Enum.Font.Code
 				Description.FontSize = Enum.FontSize.Size14
@@ -1556,8 +1706,8 @@ do
 				Description.TextWrapped = true
 				Description.TextXAlignment = Enum.TextXAlignment.Left
 				if Close then
-					Close.AnchorPoint = Vector2.new(1)
-					Close.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+					Close.AnchorPoint = Vector2.xAxis
+					Close.BackgroundColor3 = WhiteColor3
 					Close.BackgroundTransparency = 1
 					Close.Image = "http://www.roblox.com/asset/?id=9064270627"
 					Close.ImageColor3 = library.colors.section
@@ -1608,7 +1758,7 @@ do
 			end
 			PromptObj.Close = ClosePrompt
 			if Close then
-				Close.MouseButton1Click:Connect(((DoClose ~= true) and DoClose) or ClosePrompt)
+				library.signals[1 + #library.signals] = Close.MouseButton1Click:Connect(((DoClose ~= true) and DoClose) or ClosePrompt)
 			end
 			do
 				local NameTxt = PromptData.Name
@@ -1714,10 +1864,10 @@ do
 		end
 	end
 	do
-		local Popups = Instance.new("Frame")
-		local UIListLayout = Instance.new("UIListLayout")
+		local Popups = Instance_new("Frame")
+		local UIListLayout = Instance_new("UIListLayout")
 		library.NotifyLayout = UIListLayout
-		Popups.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		Popups.BackgroundColor3 = WhiteColor3
 		Popups.BackgroundTransparency = 1
 		Popups.Name = "Popups"
 		Popups.Position = UDim2.fromOffset(10, 10)
@@ -1792,15 +1942,15 @@ do
 				Arguments = NotificationData
 			}
 			NotificationObj.Forced = NotificationObj.Paused
-			local Notification = Instance.new("Frame")
+			local Notification = Instance_new("Frame")
 			NotificationObj.Object = Notification
-			local Border = Instance.new("Frame")
-			local Inner = Instance.new("Frame")
-			local Border_2 = Instance.new("Frame")
-			local Text = Instance.new("TextLabel")
+			local Border = Instance_new("Frame")
+			local Inner = Instance_new("Frame")
+			local Border_2 = Instance_new("Frame")
+			local Text = Instance_new("TextLabel")
 			NotificationObj.TextLabel = Text
-			local Bar = Instance.new("Frame")
-			local Close = Instance.new("ImageButton")
+			local Bar = Instance_new("Frame")
+			local Close = Instance_new("ImageButton")
 			Notification.AnchorPoint = Vector2.one
 			Notification.BackgroundColor3 = library.colors.background
 			colored[1 + #colored] = {Notification, "BackgroundColor3", "background"}
@@ -1963,13 +2113,13 @@ do
 					end
 				end
 			end
-			Notification.MouseEnter:Connect(function()
+			library.signals[1 + #library.signals] = Notification.MouseEnter:Connect(function()
 				if NotificationObj.Forced then
 					return
 				end
 				Pause(true, true)
 			end)
-			Notification.MouseLeave:Connect(function()
+			library.signals[1 + #library.signals] = Notification.MouseLeave:Connect(function()
 				if NotificationObj.Forced then
 					return
 				end
@@ -1983,31 +2133,33 @@ do
 				NotificationObj.Object = nil
 			end
 			NotificationObj.Destroy = Destroy
-			Close.Activated:Connect(Destroy)
+			library.signals[1 + #library.signals] = Close.Activated:Connect(Destroy)
 			Notifications[1 + #Notifications] = NotificationObj
 			return NotificationObj, Notification, Text
 		end
 	end
 end
 function library:CreateWindow(options, ...)
-	options = (options and type(options) == "string" and resolvevararg("Window", options, ...)) or options
+	options = (options and (type(options) == "string") and resolvevararg("Window", options, ...)) or options
 	local homepage
 	local windowoptions = options
 	local windowName = options.Name or "Unnamed Window"
 	options.Name = windowName
-	if windowName and #windowName > 0 and library.WorkspaceName == "Pepsi Lib" then
+	if windowName and (#windowName > 0) and (library.WorkspaceName == "Pepsi Lib") then
 		library.WorkspaceName = convertfilename(windowName, "Pepsi Lib")
 	end
 	local pepsiLibrary = Instance_new("ScreenGui")
 	library.MainScreenGui, MainScreenGui = pepsiLibrary, pepsiLibrary
 	local main = Instance_new("Frame")
 	local mainBorder = Instance_new("Frame")
+	local tabSliderClip = Instance_new("Frame")
 	local tabSlider = Instance_new("Frame")
 	local innerMain = Instance_new("Frame")
 	local innerMainBorder = Instance_new("Frame")
 	local innerBackdrop = Instance_new("ImageLabel")
 	local innerMainHolder = Instance_new("Frame")
-	local tabsHolder = Instance_new("ImageLabel")
+	local tabsHolderGradientImg = Instance_new("ImageLabel")
+	local tabsHolder = Instance_new("ScrollingFrame")
 	local tabHolderList = Instance_new("UIListLayout")
 	local tabHolderPadding = Instance_new("UIPadding")
 	local headline = Instance_new("TextLabel")
@@ -2028,7 +2180,17 @@ function library:CreateWindow(options, ...)
 	colored[1 + #colored] = {main, "BackgroundColor3", "background"}
 	main.BorderColor3 = library.colors.outerBorder
 	colored[1 + #colored] = {main, "BorderColor3", "outerBorder"}
-	main.Position = UDim2ScaleHalf
+	if options.StartLocationUDim2 then
+		main.Position = options.StartLocationUDim2
+	elseif options.StartLocation then
+		local AbsolutePosition = options.StartLocation
+		main.Position = UDim2.fromOffset(AbsolutePosition.X, AbsolutePosition.Y)
+	elseif options.StartLocationScale then
+		local LocationRatioProjected = options.StartLocation * pepsiLibrary.AbsoluteSize
+		main.Position = UDim2.fromOffset(LocationRatioProjected.X, LocationRatioProjected.Y)
+	else
+		main.Position = UDim2ScaleHalf
+	end
 	main.Size = UDim2.fromOffset(500, 545)
 	makeDraggable(main, main)
 	mainBorder.Name = "mainBorder"
@@ -2062,43 +2224,57 @@ function library:CreateWindow(options, ...)
 	innerMainBorder.Size = UDim2ScaleOne
 	innerMainHolder.Name = "innerMainHolder"
 	innerMainHolder.Parent = innerMain
-	innerMainHolder.BackgroundColor3 = Color3.new(1, 1, 1)
+	innerMainHolder.BackgroundColor3 = WhiteColor3
 	innerMainHolder.BackgroundTransparency = 1
 	innerMainHolder.Position = UDim2:fromOffset(25)
 	innerMainHolder.Size = UDim2.new(1, 0, 1, -25)
 	innerBackdrop.Name = "innerBackdrop"
 	innerBackdrop.Parent = innerMainHolder
-	innerBackdrop.BackgroundColor3 = Color3.new(1, 1, 1)
+	innerBackdrop.BackgroundColor3 = WhiteColor3
 	innerBackdrop.BackgroundTransparency = 1
 	innerBackdrop.Size = UDim2ScaleOne
 	innerBackdrop.ZIndex = -1
 	innerBackdrop.Visible = library_flags["__Designer.Background.UseBackgroundImage"] and true
-	innerBackdrop.ImageColor3 = library_flags["__Designer.Background.ImageColor"] or Color3.new(1, 1, 1)
+	innerBackdrop.ImageColor3 = library_flags["__Designer.Background.ImageColor"] or WhiteColor3
 	innerBackdrop.ImageTransparency = (library_flags["__Designer.Background.ImageTransparency"] or 95) / 100
 	innerBackdrop.Image = resolveid(library_flags["__Designer.Background.ImageAssetID"], "__Designer.Background.ImageAssetID") or ""
 	library.Backdrop = innerBackdrop
 	tabsHolder.Name = "tabsHolder"
-	tabsHolder.Parent = innerMain
-	tabsHolder.BackgroundColor3 = library.colors.topGradient
-	colored[1 + #colored] = {tabsHolder, "BackgroundColor3", "topGradient"}
+	tabsHolder.BackgroundTransparency = 1
 	tabsHolder.BorderSizePixel = 0
 	tabsHolder.Position = UDim2.fromOffset(1, 1)
 	tabsHolder.Size = UDim2.new(1, -2, 0, 23)
-	tabsHolder.Image = "rbxassetid://2454009026"
-	tabsHolder.ImageColor3 = library.colors.bottomGradient
-	colored[1 + #colored] = {tabsHolder, "ImageColor3", "bottomGradient"}
+	tabsHolder.ZIndex = 2
+	tabsHolder.AutomaticCanvasSize = Enum.AutomaticSize.X
+	tabsHolder.CanvasSize = UDim2.new()
+	tabsHolder.ElasticBehavior = Enum.ElasticBehavior.Never
+	tabsHolder.ScrollBarImageTransparency = 1
+	tabsHolder.ScrollBarThickness = 0
+	tabsHolder.ScrollingDirection = Enum.ScrollingDirection.X
+	tabsHolder.Parent = innerMain
+	tabsHolderGradientImg.Name = "tabsHolderGradientImg"
+	tabsHolderGradientImg.Parent = innerMain
+	tabsHolderGradientImg.BackgroundColor3 = library.colors.topGradient
+	colored[1 + #colored] = {tabsHolderGradientImg, "BackgroundColor3", "topGradient"}
+	tabsHolderGradientImg.BorderSizePixel = 0
+	tabsHolderGradientImg.Position = UDim2.fromOffset(1, 1)
+	tabsHolderGradientImg.Size = UDim2.new(1, -2, 0, 23)
+	tabsHolderGradientImg.Image = "rbxassetid://2454009026"
+	tabsHolderGradientImg.ImageColor3 = library.colors.bottomGradient
+	colored[1 + #colored] = {tabsHolderGradientImg, "ImageColor3", "bottomGradient"}
 	tabHolderList.Name = "tabHolderList"
 	tabHolderList.Parent = tabsHolder
 	tabHolderList.FillDirection = Enum.FillDirection.Horizontal
 	tabHolderList.SortOrder = Enum.SortOrder.LayoutOrder
 	tabHolderList.VerticalAlignment = Enum.VerticalAlignment.Center
+	tabHolderList.HorizontalAlignment = Enum.HorizontalAlignment.Left
 	tabHolderList.Padding = UDim:new(3)
 	tabHolderPadding.Name = "tabHolderPadding"
 	tabHolderPadding.Parent = tabsHolder
 	tabHolderPadding.PaddingLeft = UDim:new(7)
 	headline.Name = "headline"
 	headline.Parent = tabsHolder
-	headline.BackgroundColor3 = Color3.new(1, 1, 1)
+	headline.BackgroundColor3 = WhiteColor3
 	headline.BackgroundTransparency = 1
 	headline.LayoutOrder = 1
 	headline.Font = Enum.Font.Code
@@ -2112,7 +2288,7 @@ function library:CreateWindow(options, ...)
 	headline.Size = UDim2:new(textToSize(headline).X + 4, 1)
 	splitter.Name = "splitter"
 	splitter.Parent = tabsHolder
-	splitter.BackgroundColor3 = Color3.new(1, 1, 1)
+	splitter.BackgroundColor3 = WhiteColor3
 	splitter.BackgroundTransparency = 1
 	splitter.LayoutOrder = 2
 	splitter.Size = UDim2:new(6, 1)
@@ -2124,8 +2300,15 @@ function library:CreateWindow(options, ...)
 	splitter.TextStrokeColor3 = library.colors.tabText
 	colored[1 + #colored] = {splitter, "TextStrokeColor3", "tabText"}
 	splitter.TextStrokeTransparency = 0.75
+	tabSliderClip.Name = "tabSliderClip"
+	tabSliderClip.Parent = main
+	tabSliderClip.BackgroundTransparency = 1
+	tabSliderClip.BorderSizePixel = 0
+	tabSliderClip.Position = UDim2.new()
+	tabSliderClip.Size = UDim2.new(1, 0, 0, 34)
+	tabSliderClip.ClipsDescendants = true
 	tabSlider.Name = "tabSlider"
-	tabSlider.Parent = main
+	tabSlider.Parent = tabSliderClip
 	tabSlider.BackgroundColor3 = library.colors.main
 	colored[1 + #colored] = {tabSlider, "BackgroundColor3", "main"}
 	tabSlider.BorderSizePixel = 0
@@ -2138,8 +2321,8 @@ function library:CreateWindow(options, ...)
 		library.signals[1 + #library.signals] = userInputService.InputBegan:Connect(function(keyCode)
 			if IgnoreCoreInputs or userInputService:GetFocusedTextBox() then
 				return
-			elseif keyCode.KeyCode == library.configuration.hideKeybind then
-				if not lasthidebing or ((os_clock() - lasthidebing) > 12) then
+			elseif (keyCode.KeyCode == library.configuration.hideKeybind) or (shared.force_toggle_gui_keybind and (shared.force_toggle_gui_keybind == keyCode.KeyCode)) then
+				if lasthidebing and ((os_clock() - lasthidebing) <= 12) then
 					main.Visible = not main.Visible
 				end
 				lasthidebing = nil
@@ -2168,15 +2351,34 @@ function library:CreateWindow(options, ...)
 		end
 		return main.Visible
 	end
+	local LastTabWindowSlideThingyOfDeath, tabswitchTween
 	function windowFunctions:MoveTabSlider(tabObject)
-		spawn(function()
+		task.spawn(function()
+			LastTabWindowSlideThingyOfDeath = tabObject
 			tabSlider.Visible = true
-			tweenService:Create(tabSlider, TweenInfo.new(0.35, library.configuration.easingStyle, library.configuration.easingDirection), {
+			local mytabswitchTween = tweenService:Create(tabSlider, TweenInfo.new(0.35, library.configuration.easingStyle, library.configuration.easingDirection), {
 				Size = UDim2.fromOffset(tabObject.AbsoluteSize.X, 1),
 				Position = UDim2.fromOffset(tabObject.AbsolutePosition.X, tabObject.AbsolutePosition.Y + tabObject.AbsoluteSize.Y) - UDim2.fromOffset(main.AbsolutePosition.X, main.AbsolutePosition.Y)
-			}):Play()
+			})
+			tabswitchTween = mytabswitchTween
+			mytabswitchTween:Play()
+			mytabswitchTween.Completed:Wait()
+			if mytabswitchTween == tabswitchTween then
+				tabswitchTween = nil
+			end
 		end)
 	end
+	function windowFunctions:ReplaceTabSliderInstant()
+		if LastTabWindowSlideThingyOfDeath then
+			if tabswitchTween then
+				tabswitchTween:Cancel()
+			end
+			tabSlider.Visible = true
+			tabSlider.Size = UDim2.fromOffset(LastTabWindowSlideThingyOfDeath.AbsoluteSize.X, 1)
+			tabSlider.Position = UDim2.fromOffset(LastTabWindowSlideThingyOfDeath.AbsolutePosition.X, LastTabWindowSlideThingyOfDeath.AbsolutePosition.Y + LastTabWindowSlideThingyOfDeath.AbsoluteSize.Y) - UDim2.fromOffset(main.AbsolutePosition.X, main.AbsolutePosition.Y)
+		end
+	end
+	library.signals[1 + #library.signals] = tabsHolder:GetPropertyChangedSignal("CanvasPosition"):Connect(windowFunctions.ReplaceTabSliderInstant)
 	windowFunctions.LastTab = nil
 	function windowFunctions:CreateTab(options, ...)
 		options = (options and (type(options) == "string") and resolvevararg("Tab", options, ...)) or options or {
@@ -2205,8 +2407,8 @@ function library:CreateWindow(options, ...)
 		local colored_newTab_TextColor3 = nil
 		if image then
 			newTab.Image = image
-			newTab.ImageColor3 = options.ImageColor or options.Color or Color3.new(1, 1, 1)
-			newTab.Size = UDim2:new(tabsHolder.AbsoluteSize.Y, 1)
+			newTab.ImageColor3 = options.ImageColor or options.Color or WhiteColor3
+			newTab.Size = UDim2:new(tabsHolderGradientImg.AbsoluteSize.Y, 1)
 		else
 			colored_newTab_TextColor3 = {newTab, "TextColor3", "tabText"}
 			colored[1 + #colored] = colored_newTab_TextColor3
@@ -2224,6 +2426,10 @@ function library:CreateWindow(options, ...)
 			newTab.Size = UDim2:new(textToSize(newTab).X + 4, 1)
 		end
 		local function goto()
+			if windowFunctions.CloseDropdown then
+				pcall(windowFunctions.CloseDropdown)
+				windowFunctions.CloseDropdown = nil
+			end
 			if not library.colorpicker and not submenuOpen and (windowFunctions.selected.button ~= newTab) and newTab.Parent and newTabHolder.Parent then
 				pcall(function()
 					for _, e in next, library.elements do
@@ -2261,7 +2467,8 @@ function library:CreateWindow(options, ...)
 				windowFunctions.LastTab = colored_newTab_TextColor3
 			end
 		end
-		if not homepage and newTab.LayoutOrder <= 4 then
+		if homepage or (newTab.LayoutOrder > 4) then
+		else
 			homepage = goto
 		end
 		library.signals[1 + #library.signals] = newTab.MouseButton1Click:Connect(goto)
@@ -2274,13 +2481,13 @@ function library:CreateWindow(options, ...)
 		end
 		newTabHolder.Name = removeSpaces((tabName and tabName:lower()) or "???") .. "TabHolder"
 		newTabHolder.Parent = innerMainHolder
-		newTabHolder.BackgroundColor3 = Color3.new(1, 1, 1)
+		newTabHolder.BackgroundColor3 = WhiteColor3
 		newTabHolder.BackgroundTransparency = 1
 		newTabHolder.Size = UDim2ScaleOne
 		newTabHolder.Visible = windowFunctions.tabCount == 1
 		left.Name = "left"
 		left.Parent = newTabHolder
-		left.BackgroundColor3 = Color3.new(1, 1, 1)
+		left.BackgroundColor3 = WhiteColor3
 		left.BackgroundTransparency = 1
 		left.Size = UDim2.fromScale(0.5, 1)
 		left.CanvasSize = UDim2.new()
@@ -2295,7 +2502,7 @@ function library:CreateWindow(options, ...)
 		leftPadding.PaddingTop = UDim:new(12)
 		right.Name = "right"
 		right.Parent = newTabHolder
-		right.BackgroundColor3 = Color3.new(1, 1, 1)
+		right.BackgroundColor3 = WhiteColor3
 		right.BackgroundTransparency = 1
 		right.Size = UDim2.fromScale(0.5, 1)
 		right.CanvasSize = UDim2.new()
@@ -2328,7 +2535,7 @@ function library:CreateWindow(options, ...)
 			Select = goto
 		}
 		function tabFunctions:CreateSection(options, ...)
-			options = (options and type(options) == "string" and resolvevararg("Tab", options, ...)) or options
+			options = (options and (type(options) == "string") and resolvevararg("Tab", options, ...)) or options
 			local sectionName, holderSide = options.Name or "Unnamed Section", options.Side
 			options.Name = sectionName
 			local newSection = Instance_new("Frame")
@@ -2360,7 +2567,7 @@ function library:CreateWindow(options, ...)
 			newSectionBorder.Size = UDim2ScaleOne
 			sectionHolder.Name = "sectionHolder"
 			sectionHolder.Parent = newSection
-			sectionHolder.BackgroundColor3 = Color3.new(1, 1, 1)
+			sectionHolder.BackgroundColor3 = WhiteColor3
 			sectionHolder.BackgroundTransparency = 1
 			sectionHolder.Size = UDim2ScaleOne
 			sectionList.Name = "sectionList"
@@ -2373,7 +2580,7 @@ function library:CreateWindow(options, ...)
 			sectionPadding.PaddingTop = UDim:new(9)
 			sectionHeadline.Name = "sectionHeadline"
 			sectionHeadline.Parent = newSection
-			sectionHeadline.BackgroundColor3 = Color3.new(1, 1, 1)
+			sectionHeadline.BackgroundColor3 = WhiteColor3
 			sectionHeadline.BackgroundTransparency = 1
 			sectionHeadline.Position = UDim2.fromOffset(18, -8)
 			sectionHeadline.ZIndex = 2
@@ -2409,7 +2616,8 @@ function library:CreateWindow(options, ...)
 			}
 			function sectionFunctions:Update(extra)
 				local currentHolder = newSection.Parent
-				if not newSection.Visible then
+				if newSection.Visible then
+				else
 					newSection.Visible = true
 				end
 				newSection.Size = UDim2.new(1, -20, 0, (15 + sectionList.AbsoluteContentSize.Y))
@@ -2450,7 +2658,7 @@ function library:CreateWindow(options, ...)
 				local lockedup = options.Locked
 				newToggle.Name = removeSpaces((toggleName and toggleName:lower() or "???") .. "Toggle")
 				newToggle.Parent = sectionHolder
-				newToggle.BackgroundColor3 = Color3.new(1, 1, 1)
+				newToggle.BackgroundColor3 = WhiteColor3
 				newToggle.BackgroundTransparency = 1
 				newToggle.Size = UDim2.new(1, 0, 0, 19)
 				toggle.Name = "toggle"
@@ -2486,7 +2694,7 @@ function library:CreateWindow(options, ...)
 				colored[1 + #colored] = colored_toggleInner_ImageColor3
 				toggleButton.Name = "toggleButton"
 				toggleButton.Parent = newToggle
-				toggleButton.BackgroundColor3 = Color3.new(1, 1, 1)
+				toggleButton.BackgroundColor3 = WhiteColor3
 				toggleButton.BackgroundTransparency = 1
 				toggleButton.Size = UDim2ScaleOne
 				toggleButton.ZIndex = 5
@@ -2497,7 +2705,7 @@ function library:CreateWindow(options, ...)
 				toggleButton.TextTransparency = 1
 				toggleHeadline.Name = "toggleHeadline"
 				toggleHeadline.Parent = newToggle
-				toggleHeadline.BackgroundColor3 = Color3.new(1, 1, 1)
+				toggleHeadline.BackgroundColor3 = WhiteColor3
 				toggleHeadline.BackgroundTransparency = 1
 				toggleHeadline.Position = UDim2.fromScale(0.123, 0.165842161)
 				toggleHeadline.Size = UDim2.fromOffset(170, 11)
@@ -2510,7 +2718,7 @@ function library:CreateWindow(options, ...)
 				toggleHeadline.TextXAlignment = Enum.TextXAlignment.Left
 				local last_v
 				local function Set(t, newStatus)
-					if nil == newStatus and t ~= nil then
+					if (nil == newStatus) and (t ~= nil) then
 						newStatus = t
 					end
 					last_v = library_flags[flagName]
@@ -2518,7 +2726,8 @@ function library:CreateWindow(options, ...)
 						if type(options.Condition) == "function" then
 							local v, e = pcall(options.Condition, newStatus, last_v)
 							if e then
-								if not v then
+								if v then
+								else
 									warn(debug.traceback(string.format("Error in toggle %s's Condition function: %s", flagName, e), 2))
 								end
 							else
@@ -2526,7 +2735,7 @@ function library:CreateWindow(options, ...)
 							end
 						end
 					end
-					if newStatus ~= nil and type(newStatus) == "boolean" then
+					if (newStatus ~= nil) and (type(newStatus) == "boolean") then
 						library_flags[flagName] = newStatus
 						if options.Location then
 							options.Location[options.LocationFlag or flagName] = newStatus
@@ -2540,7 +2749,9 @@ function library:CreateWindow(options, ...)
 								BackgroundColor3 = (newStatus and darkenColor(library.colors.main, 1.5)) or library.colors.topGradient,
 								ImageColor3 = (newStatus and darkenColor(library.colors.main, 2.5)) or library.colors.bottomGradient
 							}):Play()
-							task.spawn(callback, newStatus, last_v)
+							if callback and __runscript then
+								task.spawn(callback, newStatus, last_v)
+							end
 						end
 					end
 					return newStatus
@@ -2576,7 +2787,7 @@ function library:CreateWindow(options, ...)
 					local newKeybind = newToggle
 					keybindPositioner.Name = "keybindPositioner"
 					keybindPositioner.Parent = newKeybind
-					keybindPositioner.BackgroundColor3 = Color3.new(1, 1, 1)
+					keybindPositioner.BackgroundColor3 = WhiteColor3
 					keybindPositioner.BackgroundTransparency = 1
 					keybindPositioner.Position = UDim2.new(0.00448430516)
 					keybindPositioner.Size = UDim2.fromOffset(214, 19)
@@ -2590,7 +2801,7 @@ function library:CreateWindow(options, ...)
 					keybindButton.Name = "keybindButton"
 					keybindButton.Parent = keybindPositioner
 					keybindButton.Active = false
-					keybindButton.BackgroundColor3 = Color3.new(1, 1, 1)
+					keybindButton.BackgroundColor3 = WhiteColor3
 					keybindButton.BackgroundTransparency = 1
 					keybindButton.Position = UDim2.fromScale(0.598130822, 0.184210524)
 					keybindButton.Selectable = false
@@ -2625,7 +2836,8 @@ function library:CreateWindow(options, ...)
 								return receivingKey:Disconnect()
 							end
 							klast_v = library_flags[kbflag]
-							if not keyHandler.notAllowedKeys[key.KeyCode] then
+							if keyHandler.notAllowedKeys[key.KeyCode] then
+							else
 								if key.KeyCode ~= Enum.KeyCode.Unknown then
 									bindedKey = (key.KeyCode ~= Enum.KeyCode.Escape and key.KeyCode) or library_flags[kbflag]
 									library_flags[kbflag] = bindedKey
@@ -2644,11 +2856,11 @@ function library:CreateWindow(options, ...)
 										}):Play()
 										receivingKey:Disconnect()
 									end
-									if callback and klast_v ~= bindedKey then
+									if __runscript and callback and (klast_v ~= bindedKey) then
 										task.spawn(callback, bindedKey, klast_v)
 									end
 									return
-								elseif key.KeyCode == Enum.KeyCode.Unknown and not keyHandler.notAllowedMouseInputs[key.UserInputType] then
+								elseif (key.KeyCode == Enum.KeyCode.Unknown) and not keyHandler.notAllowedMouseInputs[key.UserInputType] then
 									bindedKey = key.UserInputType
 									library_flags[kbflag] = bindedKey
 									if options.Location then
@@ -2664,7 +2876,7 @@ function library:CreateWindow(options, ...)
 										TextColor3 = library.colors.otherElementText
 									}):Play()
 									receivingKey:Disconnect()
-									if callback and klast_v ~= bindedKey then
+									if __runscript and callback and (klast_v ~= bindedKey) then
 										task.spawn(callback, bindedKey, klast_v)
 									end
 									return
@@ -2680,7 +2892,7 @@ function library:CreateWindow(options, ...)
 								TextColor3 = library.colors.otherElementText
 							}):Play()
 							receivingKey:Disconnect()
-							if callback and klast_v ~= bindedKey then
+							if __runscript and callback and (klast_v ~= bindedKey) then
 								task.spawn(callback, bindedKey, klast_v)
 							end
 						end)
@@ -2690,9 +2902,11 @@ function library:CreateWindow(options, ...)
 					if kbpresscallback and not justBinded then
 						library.signals[1 + #library.signals] = userInputService.InputBegan:Connect(function(key, chatting)
 							chatting = chatting or (userInputService:GetFocusedTextBox() and true)
-							if not chatting and not justBinded then
-								if not keyHandler.notAllowedKeys[key.KeyCode] and not keyHandler.notAllowedMouseInputs[key.UserInputType] then
-									if bindedKey == key.UserInputType or not justBinded and bindedKey == key.KeyCode then
+							if chatting or justBinded then
+							else
+								if keyHandler.notAllowedKeys[key.KeyCode] or keyHandler.notAllowedMouseInputs[key.UserInputType] then
+								else
+									if (bindedKey == key.UserInputType) or not justBinded and (bindedKey == key.KeyCode) then
 										if kbpresscallback then
 											task.spawn(kbpresscallback, key, chatting)
 										end
@@ -2717,15 +2931,17 @@ function library:CreateWindow(options, ...)
 							return
 						end
 						chatting = chatting or userInputService:GetFocusedTextBox()
-						if not chatting then
+						if chatting then
+						else
 							local key = library_flags[kbflag]
 							local mode = options.Mode
-							if not modes[mode] then
+							if modes[mode] then
+							else
 								mode = "dynamic"
 								options.Mode = mode
 							end
-							if key == input.KeyCode or key == input.UserInputType then
-								if mode == "dynamic" or mode == "both" or mode == "hold" then
+							if (key == input.KeyCode) or (key == input.UserInputType) then
+								if (mode == "dynamic") or (mode == "both") or mode == "hold" then
 									if mode == "dynamic" and library_flags[flagName] then
 										return Set(false)
 									end
@@ -2733,14 +2949,15 @@ function library:CreateWindow(options, ...)
 									local now = os.clock()
 									local waittil
 									if mode == "dynamic" then
-										waittil = Instance.new("BindableEvent")
+										waittil = Instance_new("BindableEvent")
 									end
 									local xconnection
 									xconnection = userInputService.InputEnded:Connect(function(input, chatting)
 										chatting = chatting or userInputService:GetFocusedTextBox()
-										if not chatting and (key == input.KeyCode or key == input.UserInputType) then
+										if chatting or ((key ~= input.KeyCode) and (key ~= input.UserInputType)) then
+										else
 											xconnection = (xconnection and xconnection:Disconnect() and nil) or nil
-											if mode == "hold" or os.clock() - now > math.clamp(tonumber(options.DynamicTime) or 0.65, 0.05, 20) then
+											if (mode == "hold") or ((os.clock() - now) > math.clamp(tonumber(options.DynamicTime) or 0.65, 0.05, 20)) then
 												Set(false)
 											end
 										end
@@ -2753,10 +2970,10 @@ function library:CreateWindow(options, ...)
 						end
 					end)
 					local function kbset(t, key)
-						if nil == key and t ~= nil then
+						if (nil == key) and (t ~= nil) then
 							key = t
 						end
-						if key == "nil" or key == "NONE" or key == "none" then
+						if (key == "nil") or (key == "NONE") or (key == "none") then
 							key = nil
 						end
 						last_v = library_flags[kbflag]
@@ -2765,7 +2982,7 @@ function library:CreateWindow(options, ...)
 						if options.Location then
 							options.Location[options.LocationFlag or kbflag] = key
 						end
-						keyName = (key == nil and "NONE") or keyHandler.allowedKeys[key]
+						keyName = ((key == nil) and "NONE") or keyHandler.allowedKeys[key]
 						keybindButton.Text = "[" .. (keyName or key.Name or tostring(key):gsub("Enum.KeyCode.", "")) .. "]"
 						keybindButton.Size = UDim2.fromOffset(textToSize(keybindButton).X + 4, 12)
 						justBinded = true
@@ -2774,7 +2991,7 @@ function library:CreateWindow(options, ...)
 						tweenService:Create(keybindButton, TweenInfo.new(0.35, library.configuration.easingStyle, library.configuration.easingDirection), {
 							TextColor3 = library.colors.otherElementText
 						}):Play()
-						if callback and (last_v ~= key or options.AllowDuplicateCalls) then
+						if __runscript and callback and ((last_v ~= key) or options.AllowDuplicateCalls) then
 							task.spawn(callback, key, last_v)
 						end
 						return key
@@ -2833,13 +3050,15 @@ function library:CreateWindow(options, ...)
 				end
 				sectionFunctions:Update()
 				library.signals[1 + #library.signals] = toggleButton.MouseButton1Click:Connect(function()
-					if not library.colorpicker and not submenuOpen and not lockedup then
+					if submenuOpen or lockedup or library.colorpicker then
+					else
 						local newval = not library_flags[flagName]
 						if options.Condition ~= nil then
 							if type(options.Condition) == "function" then
 								local v, e = pcall(options.Condition, newval, not newval)
 								if e then
-									if not v then
+									if v then
+									else
 										warn(debug.traceback(string.format("Error in toggle %s's Condition function: %s", flagName, e), 2))
 									end
 								else
@@ -2859,7 +3078,7 @@ function library:CreateWindow(options, ...)
 							BackgroundColor3 = (newval and darkenColor(library.colors.main, 1.5)) or library.colors.topGradient,
 							ImageColor3 = (newval and darkenColor(library.colors.main, 2.5)) or library.colors.bottomGradient
 						}):Play()
-						if callback then
+						if callback and __runscript then
 							task.spawn(callback, newval)
 						end
 					end
@@ -2955,7 +3174,8 @@ function library:CreateWindow(options, ...)
 								if type(overridecondition or options.Condition) == "function" then
 									local v, e = pcall(overridecondition or options.Condition, newStatus, last_v)
 									if e then
-										if not v then
+										if v then
+										else
 											warn(debug.traceback(string.format("Error in toggle (RawSet) %s's Condition function: %s", flagName, e), 2))
 										end
 									else
@@ -2999,7 +3219,8 @@ function library:CreateWindow(options, ...)
 						return lockedup
 					end,
 					Lock = function()
-						if not lockedup then
+						if lockedup then
+						else
 							lockedup = true
 							colored_toggleHeadline_TextColor3[4] = 2.5
 							Update()
@@ -3021,7 +3242,7 @@ function library:CreateWindow(options, ...)
 						return lockedup
 					end,
 					SetCondition = function(t, condition)
-						if type(t) ~= "table" and condition == nil then
+						if (type(t) ~= "table") and (condition == nil) then
 							condition = t
 						end
 						options.Condition = condition
@@ -3040,7 +3261,7 @@ function library:CreateWindow(options, ...)
 			sectionFunctions.Tog = sectionFunctions.AddToggle
 			function sectionFunctions:AddButton(...)
 				local args
-				if ... and not select(2, ...) and type(...) == "table" and #... > 0 and type((...)[1]) == "table" and (...)[1].Name then
+				if ... and not select(2, ...) and (type(...) == "table") and (#... > 0) and (type((...)[1]) == "table") and (...)[1].Name then
 					args = ...
 				else
 					args = {...}
@@ -3049,13 +3270,13 @@ function library:CreateWindow(options, ...)
 				local frames = {}
 				local fram
 				for _, options in next, args do
-					options = (options and options[1] and type(options[1]) == "string" and resolvevararg("Button", unpack(options))) or options
+					options = (options and options[1] and (type(options[1]) == "string") and resolvevararg("Button", unpack(options))) or options
 					local buttonName, callback = assert(options.Name, "Missing Name for new button."), options.Callback or (warn("AddButton missing callback. Name:", options.Name or "No Name", debug.traceback("")) and nil) or function()
 					end
 					local lockedup = options.Locked
 					local realButton = Instance_new("TextButton")
 					realButton.Name = "realButton"
-					realButton.BackgroundColor3 = Color3.new(1, 1, 1)
+					realButton.BackgroundColor3 = WhiteColor3
 					realButton.BackgroundTransparency = 1
 					realButton.Size = UDim2ScaleOne
 					realButton.ZIndex = 5
@@ -3076,7 +3297,7 @@ function library:CreateWindow(options, ...)
 					local button = Instance_new("ImageLabel")
 					newButton.Name = removeSpaces((buttonName and buttonName:lower() or "???") .. "Holder")
 					newButton.Parent = sectionHolder
-					newButton.BackgroundColor3 = Color3.new(1, 1, 1)
+					newButton.BackgroundColor3 = WhiteColor3
 					newButton.BackgroundTransparency = 1
 					newButton.Size = UDim2.new(1, 0, 0, 24)
 					button.Name = "button"
@@ -3116,27 +3337,39 @@ function library:CreateWindow(options, ...)
 					offset = offset + textsize + 6
 					sectionFunctions:Update()
 					local presses = 0
-					library.signals[1 + #library.signals] = realButton.MouseButton1Click:Connect(function()
+					local function do_callback(f, c)
+						local callback = f or options.Callback or callback
+						local c = c or options.Condition
 						if lockedup then
 							return
 						end
-						if options.Condition ~= nil and type(options.Condition) == "function" then
-							local v, e = pcall(options.Condition, presses)
+						if (c ~= nil) and (type(c) == "function") and __runscript then
+							local v, e = pcall(c, presses)
 							if e then
-								if not v then
+								if v then
+								else
 									warn(debug.traceback(string.format("Error in button %s's Condition function: %s", buttonName, e), 2))
 								end
 							else
 								return
 							end
 						end
-						if not library.colorpicker and not submenuOpen then
+						if submenuOpen or library.colorpicker then
+						else
 							presses = 1 + presses
-							task.spawn(callback, presses)
+							if callback and __runscript then
+								task.spawn(callback, presses)
+							end
 						end
+					end
+					library.signals[1 + #library.signals] = realButton.MouseButton1Click:Connect(function()
+						return do_callback()
+					end)
+					library.signals[1 + #library.signals] = realButton.MouseButton2Click:Connect(function()
+						return do_callback(options.CallbackRight, options.ConditionRight)
 					end)
 					local imin
-					library.signals[1 + #library.signals] = button.MouseEnter:Connect(function()
+					library.signals[1 + #library.signals] = button.MouseEnter:Connect(function(...)
 						imin = 1
 						colored_button_BackgroundColor3[3] = "main"
 						colored_button_BackgroundColor3[4] = 1.5
@@ -3146,8 +3379,16 @@ function library:CreateWindow(options, ...)
 							BackgroundColor3 = darkenColor(library.colors.main, 1.5),
 							ImageColor3 = darkenColor(library.colors.main, 2.5)
 						}):Play()
+						local mec = options.MouseEnterCallback
+						if mec and (type(mec) == "function") then
+							local x, e = pcall(mec, ...)
+							if x then
+							elseif e then
+								warn(debug.traceback(string.format("Error in button %s's MouseEnterCallback function: %s", buttonName, e), 2))
+							end
+						end
 					end)
-					library.signals[1 + #library.signals] = button.MouseLeave:Connect(function()
+					library.signals[1 + #library.signals] = button.MouseLeave:Connect(function(...)
 						imin = nil
 						colored_button_BackgroundColor3[3] = "topGradient"
 						colored_button_BackgroundColor3[4] = nil
@@ -3157,6 +3398,14 @@ function library:CreateWindow(options, ...)
 							BackgroundColor3 = library.colors.topGradient,
 							ImageColor3 = library.colors.bottomGradient
 						}):Play()
+						local mlc = options.MouseLeaveCallback
+						if mlc and (type(mlc) == "function") then
+							local x, e = pcall(mlc, ...)
+							if x then
+							elseif e then
+								warn(debug.traceback(string.format("Error in button %s's MouseLeaveCallback function: %s", buttonName, e), 2))
+							end
+						end
 					end)
 					local function Update(Recursive)
 						buttonName, callback = options.Name or buttonName, options.Callback or (warn(debug.traceback("AddButton missing callback. Name:" .. (options.Name or buttonName or "No Name"), 2)) and nil) or function()
@@ -3220,7 +3469,7 @@ function library:CreateWindow(options, ...)
 							if lockedup then
 								return presses
 							end
-							if options.Condition ~= nil and type(options.Condition) == "function" then
+							if (options.Condition ~= nil) and (type(options.Condition) == "function") then
 								local v, e = pcall(options.Condition, presses)
 								if e then
 									if v then
@@ -3237,16 +3486,20 @@ function library:CreateWindow(options, ...)
 								table.remove(args, 1)
 							end
 							presses = 1 + presses
-							task.spawn(callback, presses, ...)
+							if callback and __runscript then
+								task.spawn(callback, presses, ...)
+							end
 							return presses
 						end,
 						RawPress = function(...)
 							local args = {...}
 							local a1 = args[1]
-							if a1 and type(a1) == "table" then
+							if a1 and (type(a1) == "table") then
 								table.remove(args, 1)
 							end
-							task.spawn(callback, presses, ...)
+							if callback and __runscript then
+								task.spawn(callback, presses, ...)
+							end
 							return presses
 						end,
 						Get = function()
@@ -3268,7 +3521,8 @@ function library:CreateWindow(options, ...)
 							return lockedup
 						end,
 						Lock = function()
-							if not lockedup then
+							if lockedup then
+							else
 								lockedup = true
 								Update()
 							end
@@ -3282,7 +3536,7 @@ function library:CreateWindow(options, ...)
 							return lockedup
 						end,
 						SetCondition = function(t, condition)
-							if type(t) ~= "table" and condition == nil then
+							if (type(t) ~= "table") and (condition == nil) then
 								condition = t
 							end
 							options.Condition = condition
@@ -3290,7 +3544,7 @@ function library:CreateWindow(options, ...)
 						end,
 						Update = Update,
 						SetText = function(t, str)
-							if type(t) ~= "table" and str == nil then
+							if (type(t) ~= "table") and (str == nil) then
 								str = t
 							end
 							buttonName = str
@@ -3299,7 +3553,7 @@ function library:CreateWindow(options, ...)
 							return str
 						end,
 						SetCallback = function(t, call)
-							if type(t) ~= "table" and call == nil then
+							if (type(t) ~= "table") and (call == nil) then
 								call = t
 							end
 							options.Callback = call
@@ -3357,7 +3611,7 @@ function library:CreateWindow(options, ...)
 			sectionFunctions.NewButton = sectionFunctions.AddButton
 			sectionFunctions.Button = sectionFunctions.AddButton
 			function sectionFunctions:AddTextbox(options, ...)
-				options = (options and type(options) == "string" and resolvevararg("Textbox", options, ...)) or options
+				options = (options and (type(options) == "string") and resolvevararg("Textbox", options, ...)) or options
 				local textboxName, presetValue, placeholder, callback, flagName = assert(options.Name, "Missing Name for new textbox."), options.Value, options.Placeholder, options.Callback, options.Flag or (function()
 					library.unnamedtextboxes = 1 + (library.unnamedtextboxes or 0)
 					return "Textbox" .. tostring(library.unnamedtextboxes)
@@ -3373,7 +3627,7 @@ function library:CreateWindow(options, ...)
 				local textboxHeadline = Instance_new("TextLabel")
 				newTextbox.Name = removeSpaces((textboxName and textboxName:lower()) or "???") .. "Holder"
 				newTextbox.Parent = sectionHolder
-				newTextbox.BackgroundColor3 = Color3.new(1, 1, 1)
+				newTextbox.BackgroundColor3 = WhiteColor3
 				newTextbox.BackgroundTransparency = 1
 				newTextbox.Size = UDim2.new(1, 0, 0, 42)
 				textbox.Name = "textbox"
@@ -3418,7 +3672,7 @@ function library:CreateWindow(options, ...)
 				if options.TextScaled or options.Scaled then
 					realTextbox.TextScaled = true
 				end
-				realTextbox.BackgroundColor3 = Color3.new(1, 1, 1)
+				realTextbox.BackgroundColor3 = WhiteColor3
 				realTextbox.BackgroundTransparency = 1
 				realTextbox.Position = UDim2.new(0.0295485705)
 				realTextbox.Size = UDim2.fromScale(0.97, 1)
@@ -3436,12 +3690,13 @@ function library:CreateWindow(options, ...)
 				end
 				realTextbox.PlaceholderText = (placeholder ~= nil and tostring(placeholder)) or (presetValue ~= nil and tostring(presetValue)) or ""
 				realTextbox.TextXAlignment = Enum.TextXAlignment.Left
-				if options.CustomProperties and type(options.CustomProperties) == "table" then
+				if options.CustomProperties and (type(options.CustomProperties) == "table") then
 					for k, v in next, options.CustomProperties do
 						local oof, e = pcall(function()
 							realTextbox[k] = v
 						end)
-						if not oof and e then
+						if oof then
+						elseif e then
 							warn("Error setting Textbox", flagName, "|", e, debug.traceback(""))
 						end
 					end
@@ -3450,7 +3705,7 @@ function library:CreateWindow(options, ...)
 				textboxHeadline.Name = "textboxHeadline"
 				textboxHeadline.Parent = newTextbox
 				textboxHeadline.Active = true
-				textboxHeadline.BackgroundColor3 = Color3.new(1, 1, 1)
+				textboxHeadline.BackgroundColor3 = WhiteColor3
 				textboxHeadline.BackgroundTransparency = 1
 				textboxHeadline.Position = UDim2.new(0.031)
 				textboxHeadline.Selectable = true
@@ -3470,7 +3725,8 @@ function library:CreateWindow(options, ...)
 						local typ = type(options.PreFormat)
 						if typ == "function" then
 							local x, e = pcall(options.PreFormat, val)
-							if not x and e then
+							if x then
+							elseif e then
 								warn("Error in Pre-Format (Textbox " .. flagName .. "):", e)
 							else
 								val = e
@@ -3478,10 +3734,10 @@ function library:CreateWindow(options, ...)
 						end
 					end
 					if requiredtype == "number" then
-						if not options.Hex and not options.Binary and not options.Base then
-							val = tonumber(val) or tonumber(val:gsub("%D", ""), 10) or 0
-						else
+						if options.Hex or options.Binary or options.Base then
 							val = tonumber(val, (options.Hex and 16) or (options.Binary and 2) or options.Base or 10) or 0
+						else
+							val = tonumber(val) or tonumber(val:gsub("%D", ""), 10) or 0
 						end
 						if options.Max or options.Min then
 							val = math.clamp(val, options.Min or -math.huge, options.Max or math.huge)
@@ -3495,7 +3751,8 @@ function library:CreateWindow(options, ...)
 						local typ = type(options.PostFormat)
 						if typ == "function" then
 							local x, e = pcall(options.PostFormat, val)
-							if not x and e then
+							if x then
+							elseif e then
 								warn("Error in Post-Format (Textbox " .. flagName .. "):", e)
 							else
 								val = e
@@ -3511,7 +3768,7 @@ function library:CreateWindow(options, ...)
 					if options.Location then
 						options.Location[options.LocationFlag or flagName] = val
 					end
-					if callback and last_v ~= val then
+					if __runscript and callback and (last_v ~= val) then
 						task.spawn(callback, tostring(val), last_v, realTextbox)
 					end
 				end)
@@ -3536,7 +3793,7 @@ function library:CreateWindow(options, ...)
 					}):Play()
 				end)
 				local function set(t, str)
-					if nil == str and t ~= nil then
+					if (nil == str) and (t ~= nil) then
 						str = t
 					end
 					last_v = library_flags[flagName]
@@ -3544,11 +3801,11 @@ function library:CreateWindow(options, ...)
 					if options.Location then
 						options.Location[options.LocationFlag or flagName] = str
 					end
-					local sstr = (str ~= nil and tostring(str)) or "Empty Text"
+					local sstr = ((str ~= nil) and tostring(str)) or "Empty Text"
 					if realTextbox.Text ~= sstr then
 						realTextbox.Text = sstr
 					end
-					if callback and (last_v ~= str or options.AllowDuplicateCalls) then
+					if callback and __runscript and ((last_v ~= str) or options.AllowDuplicateCalls) then
 						task.spawn(callback, str, last_v, realTextbox)
 					end
 					return str
@@ -3565,7 +3822,7 @@ function library:CreateWindow(options, ...)
 				local function update()
 					textboxName, placeholder, callback = options.Name or textboxName, options.Placeholder or placeholder, options.Callback
 					local str = library_flags[flagName]
-					str = (str ~= nil and tostring(str)) or "Empty Text"
+					str = ((str ~= nil) and tostring(str)) or "Empty Text"
 					if realTextbox.Text ~= str then
 						realTextbox.Text = str
 					end
@@ -3592,7 +3849,7 @@ function library:CreateWindow(options, ...)
 						end
 					end,
 					RawSet = function(t, str)
-						if t ~= nil and str == nil then
+						if (t ~= nil) and (str == nil) then
 							str = t
 						end
 						last_v = library_flags[flagName]
@@ -3640,12 +3897,12 @@ function library:CreateWindow(options, ...)
 				local keyName = (presetKeybind and tostring(presetKeybind):gsub("Enum.KeyCode.", "") or "")
 				newKeybind.Name = "newKeybind"
 				newKeybind.Parent = sectionHolder
-				newKeybind.BackgroundColor3 = Color3.new(1, 1, 1)
+				newKeybind.BackgroundColor3 = WhiteColor3
 				newKeybind.BackgroundTransparency = 1
 				newKeybind.Size = UDim2.new(1, 0, 0, 19)
 				keybindHeadline.Name = "keybindHeadline"
 				keybindHeadline.Parent = newKeybind
-				keybindHeadline.BackgroundColor3 = Color3.new(1, 1, 1)
+				keybindHeadline.BackgroundColor3 = WhiteColor3
 				keybindHeadline.BackgroundTransparency = 1
 				keybindHeadline.Position = UDim2.fromScale(0.031, 0.165842161)
 				keybindHeadline.Size = UDim2.fromOffset(215, 12)
@@ -3657,7 +3914,7 @@ function library:CreateWindow(options, ...)
 				keybindHeadline.TextXAlignment = Enum.TextXAlignment.Left
 				keybindPositioner.Name = "keybindPositioner"
 				keybindPositioner.Parent = newKeybind
-				keybindPositioner.BackgroundColor3 = Color3.new(1, 1, 1)
+				keybindPositioner.BackgroundColor3 = WhiteColor3
 				keybindPositioner.BackgroundTransparency = 1
 				keybindPositioner.Position = UDim2.new(0.00448430516)
 				keybindPositioner.Size = UDim2.fromOffset(214, 19)
@@ -3670,13 +3927,13 @@ function library:CreateWindow(options, ...)
 				keybindButton.Name = "keybindButton"
 				keybindButton.Parent = keybindPositioner
 				keybindButton.Active = false
-				keybindButton.BackgroundColor3 = Color3.new(1, 1, 1)
+				keybindButton.BackgroundColor3 = WhiteColor3
 				keybindButton.BackgroundTransparency = 1
 				keybindButton.Position = UDim2.fromScale(0.598130822, 0.184210524)
 				keybindButton.Selectable = false
 				keybindButton.Size = UDim2.fromOffset(46, 12)
 				keybindButton.Font = Enum.Font.Code
-				keybindButton.Text = (presetKeybind and tostring(presetKeybind):gsub("Enum.KeyCode.", "") or "[NONE]")
+				keybindButton.Text = (presetKeybind and tostring(presetKeybind):gsub("Enum.KeyCode.", "")) or "[NONE]"
 				keybindButton.TextColor3 = library.colors.otherElementText
 				local colored_keybindButton_TextColor3 = {keybindButton, "TextColor3", "otherElementText"}
 				colored[1 + #colored] = colored_keybindButton_TextColor3
@@ -3705,9 +3962,10 @@ function library:CreateWindow(options, ...)
 					local receivingKey
 					receivingKey = userInputService.InputBegan:Connect(function(key)
 						last_v = library_flags[flag]
-						if not keyHandler.notAllowedKeys[key.KeyCode] then
+						if keyHandler.notAllowedKeys[key.KeyCode] then
+						else
 							if key.KeyCode ~= Enum.KeyCode.Unknown then
-								bindedKey = (key.KeyCode ~= Enum.KeyCode.Escape and key.KeyCode) or library_flags[flag]
+								bindedKey = ((key.KeyCode ~= Enum.KeyCode.Escape) and key.KeyCode) or library_flags[flag]
 								library_flags[flag] = bindedKey
 								if options.Location then
 									options.Location[options.LocationFlag or flag] = bindedKey
@@ -3724,7 +3982,7 @@ function library:CreateWindow(options, ...)
 									}):Play()
 									receivingKey:Disconnect()
 								end
-								if callback and last_v ~= bindedKey then
+								if callback and __runscript and (last_v ~= bindedKey) then
 									task.spawn(callback, bindedKey, last_v)
 								end
 								if IsCore then
@@ -3735,13 +3993,13 @@ function library:CreateWindow(options, ...)
 									end)
 								end
 								return
-							elseif key.KeyCode == Enum.KeyCode.Unknown and not keyHandler.notAllowedMouseInputs[key.UserInputType] then
+							elseif (key.KeyCode == Enum.KeyCode.Unknown) and not keyHandler.notAllowedMouseInputs[key.UserInputType] then
 								bindedKey = key.UserInputType
 								library_flags[flag] = bindedKey
 								if options.Location then
 									options.Location[options.LocationFlag or flag] = bindedKey
 								end
-								keyName = keyHandler.allowedKeys[bindedKey]
+								keyName = ((key == nil) and "NONE") or keyHandler.allowedKeys[key]
 								keybindButton.Text = "[" .. (keyName or bindedKey.Name or tostring(key.KeyCode):gsub("Enum.KeyCode.", "")) .. "]"
 								keybindButton.Size = UDim2.fromOffset(textToSize(keybindButton).X + 4, 12)
 								justBinded = true
@@ -3751,7 +4009,7 @@ function library:CreateWindow(options, ...)
 									TextColor3 = library.colors.otherElementText
 								}):Play()
 								receivingKey:Disconnect()
-								if callback and last_v ~= bindedKey then
+								if callback and __runscript and (last_v ~= bindedKey) then
 									task.spawn(callback, bindedKey, last_v)
 								end
 								if IsCore then
@@ -3764,7 +4022,7 @@ function library:CreateWindow(options, ...)
 								return
 							end
 						end
-						if key.KeyCode == Enum.KeyCode.Backspace or Enum.KeyCode.Escape == key.KeyCode then
+						if (key.KeyCode == Enum.KeyCode.Backspace) or (Enum.KeyCode.Escape == key.KeyCode) then
 							old_texts, bindedKey = "[NONE]", nil
 						end
 						keybindButton.Text = old_texts
@@ -3774,7 +4032,7 @@ function library:CreateWindow(options, ...)
 							TextColor3 = library.colors.otherElementText
 						}):Play()
 						receivingKey:Disconnect()
-						if callback and last_v ~= bindedKey then
+						if callback and __runscript(last_v ~= bindedKey) then
 							task.spawn(callback, bindedKey, last_v)
 						end
 					end)
@@ -3782,14 +4040,17 @@ function library:CreateWindow(options, ...)
 				end
 				library.signals[1 + #library.signals] = keybindButton.MouseButton1Click:Connect(newkey)
 				library.signals[1 + #library.signals] = newKeybind.InputEnded:Connect(function(input)
-					if not library.colorpicker and not submenuOpen and input.UserInputType == Enum.UserInputType.MouseButton1 then
+					if submenuOpen or library.colorpicker or (input.UserInputType ~= Enum.UserInputType.MouseButton1) then
+					else
 						newkey()
 					end
 				end)
 				if presscallback then
 					library.signals[1 + #library.signals] = userInputService.InputBegan:Connect(function(key, chatting)
-						if not keyHandler.notAllowedKeys[key.KeyCode] and not keyHandler.notAllowedMouseInputs[key.UserInputType] then
-							if not justBinded and bindedKey == key.UserInputType or not justBinded and bindedKey == key.KeyCode and not chatting then
+						if keyHandler.notAllowedKeys[key.KeyCode] or keyHandler.notAllowedMouseInputs[key.UserInputType] then
+						else
+							if (justBinded or (bindedKey ~= key.UserInputType)) and (justBinded or chatting or (bindedKey ~= key.KeyCode)) then
+							else
 								if presscallback then
 									task.spawn(presscallback, key, chatting)
 								end
@@ -3822,7 +4083,7 @@ function library:CreateWindow(options, ...)
 					tweenService:Create(keybindButton, TweenInfo.new(0.35, library.configuration.easingStyle, library.configuration.easingDirection), {
 						TextColor3 = library.colors.otherElementText
 					}):Play()
-					if callback and ((last_v ~= key) or options.AllowDuplicateCalls) then
+					if callback and __runscript and ((last_v ~= key) or options.AllowDuplicateCalls) then
 						task.spawn(callback, key, last_v)
 					end
 					return key
@@ -3839,7 +4100,7 @@ function library:CreateWindow(options, ...)
 				local function update()
 					keybindName, callback, presscallback = options.Name or keybindName, options.Callback, options.Pressed
 					local key = library_flags[flag]
-					keyName = (key == nil and "NONE") or keyHandler.allowedKeys[key]
+					keyName = ((key == nil) and "NONE") or keyHandler.allowedKeys[key]
 					keybindButton.Text = "[" .. (keyName or key.Name or tostring(key):gsub("Enum.KeyCode.", "")) .. "]"
 					keybindButton.Size = UDim2.fromOffset(textToSize(keybindButton).X + 4, 12)
 					colored_keybindButton_TextColor3[3] = "otherElementText"
@@ -3869,10 +4130,10 @@ function library:CreateWindow(options, ...)
 						end
 					end,
 					RawSet = function(t, key)
-						if nil == key and t ~= nil then
+						if (nil == key) and (t ~= nil) then
 							key = t
 						end
-						if key == "nil" or key == "NONE" or key == "none" then
+						if (key == "nil") or (key == "NONE") or (key == "none") then
 							key = nil
 						end
 						last_v = library_flags[flag]
@@ -3897,7 +4158,7 @@ function library:CreateWindow(options, ...)
 			sectionFunctions.Keybind = sectionFunctions.AddKeybind
 			sectionFunctions.Bind = sectionFunctions.AddKeybind
 			function sectionFunctions:AddLabel(options, ...)
-				options = (options and type(options) == "string" and resolvevararg("Label", options, ...)) or options
+				options = (options and (type(options) == "string") and resolvevararg("Label", options, ...)) or options
 				local labelName, flag = options.Text or options.Value or options.Name, options.Flag or (function()
 					library.unnamedlabels = 1 + (library.unnamedlabels or 0)
 					return "Label" .. tostring(library.unnamedlabels)
@@ -3911,12 +4172,12 @@ function library:CreateWindow(options, ...)
 				local labelButton = Instance_new("TextButton")
 				newLabel.Name = "newLabel"
 				newLabel.Parent = sectionHolder
-				newLabel.BackgroundColor3 = Color3.new(1, 1, 1)
+				newLabel.BackgroundColor3 = WhiteColor3
 				newLabel.BackgroundTransparency = 1
 				newLabel.Size = UDim2.new(1, 0, 0, 19)
 				labelHeadline.Name = "labelHeadline"
 				labelHeadline.Parent = newLabel
-				labelHeadline.BackgroundColor3 = Color3.new(1, 1, 1)
+				labelHeadline.BackgroundColor3 = WhiteColor3
 				labelHeadline.BackgroundTransparency = 1
 				labelHeadline.Position = UDim2.fromScale(0.031, 0.165842161)
 				labelHeadline.Size = UDim2.fromOffset(215, 12)
@@ -3928,16 +4189,16 @@ function library:CreateWindow(options, ...)
 				labelHeadline.TextXAlignment = Enum.TextXAlignment.Left
 				labelPositioner.Name = "labelPositioner"
 				labelPositioner.Parent = newLabel
-				labelPositioner.BackgroundColor3 = Color3.new(1, 1, 1)
+				labelPositioner.BackgroundColor3 = WhiteColor3
 				labelPositioner.BackgroundTransparency = 1
 				labelPositioner.Position = UDim2.new(0.00448430516)
 				labelPositioner.Size = UDim2.fromOffset(214, 19)
 				sectionFunctions:Update()
 				local function set(t, str)
-					if nil == str and t ~= nil then
+					if (nil == str) and (t ~= nil) then
 						str = t
 					end
-					labelHeadline.Text = (nil ~= str and tostring(str)) or "Empty Text"
+					labelHeadline.Text = ((nil ~= str) and tostring(str)) or "Empty Text"
 					return str
 				end
 				local default = labelHeadline.Text
@@ -3976,7 +4237,7 @@ function library:CreateWindow(options, ...)
 			sectionFunctions.Label = sectionFunctions.AddLabel
 			sectionFunctions.Text = sectionFunctions.AddLabel
 			function sectionFunctions:AddSlider(options, ...)
-				options = (options and type(options) == "string" and resolvevararg("Slider", options, ...)) or options
+				options = (options and (type(options) == "string") and resolvevararg("Slider", options, ...)) or options
 				local sliderName, maxValue, minValue, presetValue, callback, flagName = assert(options.Name, "Missing Name for new slider."), assert(options.Max, "Missing Max for new slider."), assert(options.Min, "Missing Min for new slider."), options.Value, options.Callback, options.Flag or (function()
 					library.unnamedsliders = 1 + (library.unnamedsliders or 0)
 					return "Slider" .. tostring(library.unnamedsliders)
@@ -3985,7 +4246,7 @@ function library:CreateWindow(options, ...)
 					warn(debug.traceback("Warning! Re-used flag '" .. flagName .. "'", 3))
 				end
 				local decimalprecision = tonumber(options.Decimals or options.Precision or options.Precise)
-				if not decimalprecision and options.Max - options.Min <= 1 then
+				if decimalprecision and ((options.Max - options.Min) > 1) then
 					decimalprecision = 1
 				end
 				if decimalprecision then
@@ -4006,7 +4267,8 @@ function library:CreateWindow(options, ...)
 						return string.format(options.Format, val)
 					elseif formattyp == "function" then
 						local oof, g = pcall(options.Format, val, was)
-						if not oof or not g then
+						if oof and g then
+						else
 							warn("Your format function for", sliderName, "Slider:", flagName, "has returned nothing. It should return a string to display.", debug.traceback(""))
 							return "Format Function Errored"
 						end
@@ -4024,7 +4286,7 @@ function library:CreateWindow(options, ...)
 				local sliderDragging = false
 				newSlider.Name = "newSlider"
 				newSlider.Parent = sectionHolder
-				newSlider.BackgroundColor3 = Color3.new(1, 1, 1)
+				newSlider.BackgroundColor3 = WhiteColor3
 				newSlider.BackgroundTransparency = 1
 				newSlider.Size = UDim2.new(1, 0, 0, 42)
 				slider.Name = "slider"
@@ -4070,7 +4332,7 @@ function library:CreateWindow(options, ...)
 				sliderHeadline.Name = "sliderHeadline"
 				sliderHeadline.Parent = newSlider
 				sliderHeadline.Active = true
-				sliderHeadline.BackgroundColor3 = Color3.new(1, 1, 1)
+				sliderHeadline.BackgroundColor3 = WhiteColor3
 				sliderHeadline.BackgroundTransparency = 1
 				sliderHeadline.Position = UDim2.new(0.031)
 				sliderHeadline.Selectable = true
@@ -4085,11 +4347,11 @@ function library:CreateWindow(options, ...)
 				sliderHeadline.TextXAlignment = Enum.TextXAlignment.Left
 				local realTextbox
 				local function Set(t, newValue)
-					if nil == newValue and t ~= nil then
+					if (nil == newValue) and (t ~= nil) then
 						newValue = t
 					end
 					minValue, maxValue = options.Min, options.Max
-					if newValue and (options.IllegalInput or ((not minValue or newValue >= minValue) and (not maxValue or newValue <= maxValue))) then
+					if newValue and (options.IllegalInput or ((not minValue or (newValue >= minValue)) and (not maxValue or (newValue <= maxValue)))) then
 						local last_val = library_flags[flagName]
 						library_flags[flagName] = newValue
 						if options.Location then
@@ -4105,7 +4367,7 @@ function library:CreateWindow(options, ...)
 						if usetextbox and realTextbox then
 							realTextbox.Text = tostring(newValue)
 						end
-						if callback and (last_val ~= newValue or options.AllowDuplicateCalls) then
+						if callback and __runscript and ((last_val ~= newValue) or options.AllowDuplicateCalls) then
 							task.spawn(callback, newValue, last_val)
 						end
 					end
@@ -4157,7 +4419,7 @@ function library:CreateWindow(options, ...)
 					colored[1 + #colored] = {textboxInner, "ImageColor3", "bottomGradient"}
 					realTextbox.Name = "realTextbox"
 					realTextbox.Parent = textbox
-					realTextbox.BackgroundColor3 = Color3.new(1, 1, 1)
+					realTextbox.BackgroundColor3 = WhiteColor3
 					realTextbox.BackgroundTransparency = 1
 					realTextbox.Position = UDim2.new(0.0295485705)
 					realTextbox.Size = UDim2.fromScale(0.97, 1)
@@ -4176,15 +4438,16 @@ function library:CreateWindow(options, ...)
 							local typ = type(usetextbox.PreFormat)
 							if typ == "function" then
 								local x, e = pcall(usetextbox.PreFormat, val)
-								if not x and e then
-									warn("Error in Pre-Format (Textbox " .. flagName .. "):", e)
-								else
+								if x then
 									val = e
+								elseif e then
+									warn("Error in Pre-Format (Textbox " .. flagName .. "):", e)
 								end
 							end
 						end
 						val = (not usetextbox.Hex and not usetextbox.Binary and not usetextbox.Base and (tonumber(val) or tonumber(val:gsub("%D", ""), 10) or 0)) or tonumber(val, (usetextbox.Hex and 16) or (usetextbox.Binary and 2) or usetextbox.Base or 10) or 0
-						if not options.IllegalInput and (options.Max or options.Min) then
+						if options.IllegalInput or (options.Max and options.Min) then
+						else
 							val = math.clamp(val, options.Min or -math.huge, options.Max or math.huge)
 						end
 						local decimalprecision = tonumber(options.Decimals or options.Precision or options.Precise)
@@ -4195,10 +4458,10 @@ function library:CreateWindow(options, ...)
 							local typ = type(usetextbox.PostFormat)
 							if typ == "function" then
 								local x, e = pcall(usetextbox.PostFormat, val)
-								if not x and e then
-									warn("Error in Post-Format (Textbox " .. flagName .. "):", e)
-								else
+								if x then
 									val = e
+								elseif e then
+									warn("Error in Post-Format (Textbox " .. flagName .. "):", e)
 								end
 							end
 						end
@@ -4265,37 +4528,40 @@ function library:CreateWindow(options, ...)
 					if usetextbox and realTextbox then
 						realTextbox.Text = tostring(sliderValue)
 					end
-					if callback and last_val ~= sliderValue then
+					if callback and __runscript and (last_val ~= sliderValue) then
 						task.spawn(callback, sliderValue, last_val)
 					end
 					last_val = sliderValue
 				end
 				library.signals[1 + #library.signals] = newSlider.InputBegan:Connect(function(input)
-					if not library.colorpicker and input.UserInputType == Enum.UserInputType.MouseButton1 then
+					if library.colorpicker or (input.UserInputType ~= Enum.UserInputType.MouseButton1) then
+					else
 						sliderDragging = true
 						isDraggingSomething = true
 					end
 				end)
 				library.signals[1 + #library.signals] = newSlider.InputEnded:Connect(function(input)
-					if not library.colorpicker and input.UserInputType == Enum.UserInputType.MouseButton1 then
+					if library.colorpicker or input.UserInputType ~= Enum.UserInputType.MouseButton1 then
+					else
 						sliderDragging = false
 						isDraggingSomething = false
 					end
 				end)
 				library.signals[1 + #library.signals] = newSlider.InputBegan:Connect(function(input)
-					if not library.colorpicker and not isDraggingSomething and input.UserInputType == Enum.UserInputType.MouseButton1 then
+					if library.colorpicker or isDraggingSomething or (input.UserInputType ~= Enum.UserInputType.MouseButton1) then
+					else
 						isDraggingSomething = true
 						sliding(input, sliderInner, sliderColored)
 					end
 				end)
 				library.signals[1 + #library.signals] = userInputService.InputChanged:Connect(function(input)
-					if not library.colorpicker and sliderDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+					if not library.colorpicker and sliderDragging and (input.UserInputType == Enum.UserInputType.MouseMovement) then
 						sliding(input, sliderInner, sliderColored)
 					end
 				end)
 				local default = library_flags[flagName]
 				local function Update(t, last_val)
-					if last_val == nil and t ~= nil and type(t) ~= "table" then
+					if (last_val == nil) and (t ~= nil) and (type(t) ~= "table") then
 						last_val = t
 					end
 					sliderName, maxValue, minValue, callback = options.Name or sliderName, options.Max or maxValue, options.Min or minValue, options.Callback
@@ -4422,20 +4688,20 @@ function library:CreateWindow(options, ...)
 				local delcallback = options.ItemRemoved or options.RemovedCallback
 				local clrcallback = options.ItemsCleared or options.ClearedCallback
 				local modcallback = options.ItemChanged or options.ChangedCallback
-				if blankstring and val == nil then
+				if blankstring and (val == nil) then
 					val = blankstring
 				end
 				if val ~= nil then
 					selectedOption = val
 				end
-				if multiselect and (not selectedOption or type(selectedOption) ~= "table") then
+				if multiselect and (not selectedOption or (type(selectedOption) ~= "table")) then
 					selectedOption = {}
 				end
 				local selectedObjects = {}
 				local optionCount = 0
 				newDropdown.Name = "newDropdown"
 				newDropdown.Parent = sectionHolder
-				newDropdown.BackgroundColor3 = Color3.new(1, 1, 1)
+				newDropdown.BackgroundColor3 = WhiteColor3
 				newDropdown.BackgroundTransparency = 1
 				newDropdown.Size = UDim2.new(1, 0, 0, 42)
 				dropdown.Name = "dropdown"
@@ -4469,7 +4735,7 @@ function library:CreateWindow(options, ...)
 				colored[1 + #colored] = {dropdownInner, "ImageColor3", "bottomGradient"}
 				dropdownToggle.Name = "dropdownToggle"
 				dropdownToggle.Parent = dropdown
-				dropdownToggle.BackgroundColor3 = Color3.new(1, 1, 1)
+				dropdownToggle.BackgroundColor3 = WhiteColor3
 				dropdownToggle.BackgroundTransparency = 1
 				dropdownToggle.Position = UDim2.fromScale(0.9, 0.17)
 				dropdownToggle.Rotation = 90
@@ -4479,14 +4745,14 @@ function library:CreateWindow(options, ...)
 				dropdownToggle.ImageColor3 = Color3.fromRGB(171, 171, 171)
 				dropdownSelection.Name = "dropdownSelection"
 				dropdownSelection.Parent = dropdown
-				dropdownSelection.BackgroundColor3 = Color3.new(1, 1, 1)
+				dropdownSelection.BackgroundColor3 = WhiteColor3
 				dropdownSelection.BackgroundTransparency = 1
 				dropdownSelection.Position = UDim2.new(0.0295485705)
 				dropdownSelection.Size = UDim2.fromScale(0.85, 1)
 				dropdownSelection.ZIndex = 5
 				dropdownSelection.Font = Enum.Font.Code
 				dropdownSelection.LineHeight = 1.15
-				dropdownSelection.Text = (passed_multiselect == "string" and multiselect) or tostring((multiselect and (blankstring or "Select Item(s)")) or (selectedOption and tostring(selectedOption)) or blankstring or "No Blank String")
+				dropdownSelection.Text = ResolveDropdownItemName(multiselect, passed_multiselect, options.Name, selectedOption, flagName, blankstring)
 				dropdownSelection.TextColor3 = library.colors.otherElementText
 				colored[1 + #colored] = {dropdownSelection, "TextColor3", "otherElementText"}
 				dropdownSelection.TextSize = 14
@@ -4494,7 +4760,7 @@ function library:CreateWindow(options, ...)
 				dropdownSelection.ClearTextOnFocus = true
 				dropdownHeadline.Name = "dropdownHeadline"
 				dropdownHeadline.Parent = newDropdown
-				dropdownHeadline.BackgroundColor3 = Color3.new(1, 1, 1)
+				dropdownHeadline.BackgroundColor3 = WhiteColor3
 				dropdownHeadline.BackgroundTransparency = 1
 				dropdownHeadline.Position = UDim2.fromScale(0.034, 0.03)
 				dropdownHeadline.Size = UDim2.fromOffset(167, 11)
@@ -4533,7 +4799,7 @@ function library:CreateWindow(options, ...)
 				colored[1 + #colored] = {dropdownHolderInner, "ImageColor3", "bottomGradient"}
 				realDropdownHolder.Name = "realDropdownHolder"
 				realDropdownHolder.Parent = dropdownHolderInner
-				realDropdownHolder.BackgroundColor3 = Color3.new(1, 1, 1)
+				realDropdownHolder.BackgroundColor3 = WhiteColor3
 				realDropdownHolder.BackgroundTransparency = 1
 				realDropdownHolder.Selectable = false
 				realDropdownHolder.Size = UDim2ScaleOne
@@ -4561,7 +4827,8 @@ function library:CreateWindow(options, ...)
 					}):Play()
 				end)
 				library.signals[1 + #library.signals] = newDropdown.MouseLeave:Connect(function()
-					if not dropdownEnabled then
+					if dropdownEnabled then
+					else
 						colored_dropdown_BackgroundColor3[3] = "topGradient"
 						colored_dropdown_BackgroundColor3[4] = nil
 						colored_dropdown_ImageColor3[3] = "bottomGradient"
@@ -4579,14 +4846,15 @@ function library:CreateWindow(options, ...)
 						dropdownHolderFrame.Size = UDim2.fromOffset(206, realDropdownHolderList.AbsoluteContentSize.Y + 4)
 					end
 				end
-				local validate
-				local SetupValidation
+				local SetupValidation, validate
 				do
 					local Signals = {}
 					local Setup
 					function SetupValidation()
 						for k, v in next, Signals do
-							v = v and v:Disconnect()
+							if v then
+								v:Disconnect()
+							end
 							Signals[k] = nil
 						end
 						if options.AutoValidate and list and (typeof(list) == "Instance") then
@@ -4607,7 +4875,10 @@ function library:CreateWindow(options, ...)
 							Signal = gpcs(v, "Parent"):Connect(function()
 								if options.AutoValidate then
 									if list and (v.Parent ~= list) then
-										Signal = (Signal and Signal:Disconnect() and nil) or nil
+										if Signal then
+											Signal:Disconnect()
+										end
+										Signal = nil
 										validate()
 									end
 								else
@@ -4617,31 +4888,35 @@ function library:CreateWindow(options, ...)
 									end
 								end
 							end)
+							library.signals[1 + #library.signals] = Signal
 						end
 					end
 				end
 				local function AddOptions(optionsTable, filter)
 					if options.Sort then
-						local didstuff, dosort = nil, options.Sort
-						if type(dosort) == "function" then
+						local didstuff
+						local dosort = options.Sort
+						if dosort and (type(dosort) == "function") then
 							local g, h = pcall(table.sort, optionsTable, dosort)
 							if g then
 								didstuff = true
 							elseif h then
-								warn("Error sorting list:", h, debug.traceback(""))
+								warn("Error sorting list:", debug.traceback(h))
 							end
 						end
-						if not didstuff then
+						if didstuff then
+						else
 							table.sort(optionsTable, library.defaultSort)
 						end
 					end
-					if blankstring and (optionsTable[1] ~= blankstring or table.find(optionsTable, blankstring, 2)) then
+					if blankstring and ((optionsTable[1] ~= blankstring) or table.find(optionsTable, blankstring, 2)) then
 						local exists = table.find(optionsTable, blankstring)
 						if exists then
 							for _ = 1, 35 do
 								table.remove(optionsTable, exists)
 								exists = table.find(optionsTable, blankstring)
-								if not exists then
+								if exists then
+								else
 									break
 								end
 							end
@@ -4664,7 +4939,7 @@ function library:CreateWindow(options, ...)
 							end
 							newOption.Name = "Frame"
 							newOption.Parent = realDropdownHolder
-							local togged = (not multiselect and selectedOption == v) or (multiselect and table.find(selectedOption, v))
+							local togged = (not multiselect and (selectedOption == v)) or (multiselect and table.find(selectedOption, v))
 							newOption.BackgroundColor3 = (togged and library.colors.selectedOption) or library.colors.topGradient
 							newOption.BorderSizePixel = 0
 							newOption.Size = UDim2.fromOffset(202, 18)
@@ -4675,7 +4950,7 @@ function library:CreateWindow(options, ...)
 							optionButton.Parent = newOption
 							optionButton.Active = true
 							optionButton.AnchorPoint = Vector2Half
-							optionButton.BackgroundColor3 = Color3.new(1, 1, 1)
+							optionButton.BackgroundColor3 = WhiteColor3
 							optionButton.BackgroundTransparency = 1
 							optionButton.Position = UDim2ScaleHalf
 							optionButton.Selectable = true
@@ -4687,8 +4962,8 @@ function library:CreateWindow(options, ...)
 							optionButton.TextSize = 14
 							optionButton.TextXAlignment = Enum.TextXAlignment.Left
 							library.signals[1 + #library.signals] = optionButton[(multiselect and "MouseButton1Click") or "MouseButton1Down"]:Connect(function()
-								if not library.colorpicker then
-									dropdownSelection.Text = (passed_multiselect == "string" and multiselect) or tostring(blankstring or "Select Item(s)")
+								if library.colorpicker then
+								else
 									restorezindex[newSection] = restorezindex[newSection] or newSection.ZIndex
 									restorezindex[newDropdown] = restorezindex[newDropdown] or newDropdown.ZIndex
 									restorezindex[sectionHolder] = restorezindex[sectionHolder] or sectionHolder.ZIndex
@@ -4705,7 +4980,7 @@ function library:CreateWindow(options, ...)
 										newOption.BackgroundColor3 = (togged and library.colors.selectedOption) or library.colors.topGradient
 										newOption.ImageColor3 = (togged and library.colors.unselectedOption) or library.colors.bottomGradient
 										optionButton.TextColor3 = (togged and library.colors.main) or library.colors.otherElementText
-										if callback then
+										if callback and __runscript then
 											task.spawn(callback, selectedOption, cloned)
 										end
 										if togged then
@@ -4766,7 +5041,7 @@ function library:CreateWindow(options, ...)
 											if submenuOpen then
 												submenuOpen = nil
 											end
-											if callback then
+											if callback and __runscript then
 												task.spawn(callback, selectedOption, last_v)
 											end
 										else
@@ -4804,11 +5079,15 @@ function library:CreateWindow(options, ...)
 							UpdateDropdownHolder()
 						end
 					end
+					UpdateDropdownHolder()
 				end
-				local precisionscrolling, update
-				local showing = false
+				local precisionscrolling, update, showing
 				local function display(dropdownEnabled, f)
-					if submenuOpen == dropdown or submenuOpen == nil then
+					if dropdownEnabled and windowFunctions.CloseDropdown then
+						pcall(windowFunctions.CloseDropdown)
+						windowFunctions.CloseDropdown = nil
+					end
+					if (submenuOpen == dropdown) or (submenuOpen == nil) then
 						if dropdownEnabled then
 							list = resolvelist()
 							if next(list) then
@@ -4818,6 +5097,7 @@ function library:CreateWindow(options, ...)
 									table.insert(list, 1, EmptyVal)
 								end
 							end
+							windowFunctions.CloseDropdown = display
 							AddOptions(list, f)
 							submenuOpen = dropdown
 							dropdownToggle.Rotation = 270
@@ -4836,7 +5116,8 @@ function library:CreateWindow(options, ...)
 								ImageColor3 = darkenColor(library.colors.main, 2.5)
 							}):Play()
 							dropdownHolderFrame.Visible = true
-							if not options.DisablePrecisionScrolling then
+							if options.DisablePrecisionScrolling then
+							else
 								local scrollrate = tonumber(options.ScrollButtonRate or options.ScrollRate) or 5
 								local upkey = options.ScrollUpButton or library.scrollupbutton or shared.scrollupbutton or Enum.KeyCode.Up
 								local downkey = options.ScrollDownButton or library.scrolldownbutton or shared.scrolldownbutton or Enum.KeyCode.Down
@@ -4847,7 +5128,8 @@ function library:CreateWindow(options, ...)
 										local isdown = code == downkey
 										if isup or isdown then
 											local txt = userInputService:GetFocusedTextBox()
-											if not txt or txt == dropdownSelection then
+											if txt and (txt ~= dropdownSelection) then
+											else
 												while wait_check() and userInputService:IsKeyDown(code) do
 													realDropdownHolder.CanvasPosition = Vector2:new(math.clamp(realDropdownHolder.CanvasPosition.Y + ((isup and -scrollrate) or scrollrate), 0, realDropdownHolder.AbsoluteCanvasSize.Y))
 												end
@@ -4872,7 +5154,14 @@ function library:CreateWindow(options, ...)
 							for ins, z in next, restorezindex do
 								ins.ZIndex = z
 							end
-							precisionscrolling = (precisionscrolling and precisionscrolling:Disconnect() and nil) or nil
+							if precisionscrolling then
+								precisionscrolling:Disconnect()
+							end
+							precisionscrolling = nil
+							if dropdownSelection:IsFocused() then
+							else
+								dropdownSelection.Text = ResolveDropdownItemName(multiselect, passed_multiselect, options.Name, selectedOption, flagName, blankstring)
+							end
 						end
 					end
 					showing = dropdownEnabled
@@ -4882,24 +5171,25 @@ function library:CreateWindow(options, ...)
 					end
 				end
 				local Set = (multiselect and function(t, dat)
-					if nil == dat and t ~= nil then
+					if (nil == dat) and (t ~= nil) then
 						dat = t
 					end
 					local lastv = library_flags[flagName]
-					if not lastv or selectedOption ~= lastv then
-						if lastv and type(lastv) == "table" then
+					if lastv and (selectedOption == lastv) then
+					else
+						if lastv and (type(lastv) == "table") then
 							selectedOption = library_flags[flagName]
 						else
 							library_flags[flagName] = selectedOption
 						end
-						warn("Attempting to use new table for", flagName, " Please use :Set(), because setting it through flags table may cause errors", debug.traceback(""))
+						warn("Attempting to use new table for", flagName, " Please use :Set(), because setting it through flags table may cause errors. Unsafe operation", debug.traceback(""))
 						lastv = library_flags[flagName]
 					end
 					local cloned = {unpack(selectedOption)}
 					if not dat then
 						if #selectedOption ~= 0 then
 							table.clear(selectedOption)
-							if callback then
+							if callback and __runscript then
 								task.spawn(callback, selectedOption, cloned)
 							end
 						end
@@ -4917,12 +5207,13 @@ function library:CreateWindow(options, ...)
 					table.clear(selectedOption)
 					for k, v in next, dat do
 						selectedOption[k] = v
-						if not proceed and cloned[k] ~= v then
+						if proceed or (cloned[k] == v) then
+						else
 							proceed = 1
 						end
 					end
-					dropdownSelection.Text = (passed_multiselect == "string" and multiselect) or tostring(blankstring or "Select Item(s)")
-					if proceed and callback then
+					dropdownSelection.Text = ResolveDropdownItemName(multiselect, passed_multiselect, options.Name, selectedOption, flagName, blankstring)
+					if proceed and callback and __runscript then
 						task.spawn(callback, selectedOption, cloned)
 					end
 					if options.AutoValidate then
@@ -4930,7 +5221,8 @@ function library:CreateWindow(options, ...)
 					end
 					return selectedOption
 				end) or function(t, str)
-					if nil == str and t then
+					if str then
+					elseif (nil == str) and t then
 						str = t
 					end
 					local last_v = library_flags[flagName]
@@ -4939,11 +5231,8 @@ function library:CreateWindow(options, ...)
 					if options.Location then
 						options.Location[options.LocationFlag or flagName] = str
 					end
-					local sstr = (selectedOption and tostring(selectedOption)) or blankstring or "No Blank String"
-					if dropdownSelection.Text ~= sstr then
-						dropdownSelection.Text = sstr
-					end
-					if callback and (last_v ~= str or options.AllowDuplicateCalls) then
+					dropdownSelection.Text = ResolveDropdownItemName(multiselect, passed_multiselect, options.Name, selectedOption, flagName, blankstring)
+					if callback and __runscript and ((last_v ~= str) or options.AllowDuplicateCalls) then
 						task.spawn(callback, str, last_v)
 					end
 					if options.AutoValidate then
@@ -4971,11 +5260,12 @@ function library:CreateWindow(options, ...)
 					display(true)
 				end)
 				library.signals[1 + #library.signals] = dropdownSelection:GetPropertyChangedSignal("Text"):Connect(function()
-					if showing then
+					if showing and dropdownSelection:IsFocused() then
 						display(true, #dropdownSelection.Text > 0)
 					end
 				end)
-				if not multiselect then
+				if multiselect then
+				else
 					library.signals[1 + #library.signals] = dropdownSelection.FocusLost:Connect(function(b)
 						if showing then
 							wait()
@@ -4989,28 +5279,29 @@ function library:CreateWindow(options, ...)
 				end
 				AddOptions(list)
 				local default = library_flags[flagName]
+				if type(default) == "table" then
+					default = table.clone(default)
+				end
 				function update()
 					dropdownName, callback = options.Name or dropdownName, options.Callback
-					local sstr = (passed_multiselect == "string" and multiselect) or (not multiselect and library_flags[flagName] and tostring(library_flags[flagName])) or (not multiselect and selectedOption and tostring(selectedOption)) or blankstring or "Nothing"
-					if dropdownSelection.Text ~= sstr then
-						dropdownSelection.Text = sstr
+					local ProperBlankString
+					if blankstring and (type(blankstring) == "string") then
+						ProperBlankString = blankstring
 					end
 					dropdownHeadline.Text = (dropdownName and tostring(dropdownName)) or "???"
-					return sstr
+					return dropdownSelection.Text
 				end
 				function validate(fallbackValue)
 					if list and table.find(list, library_flags[flagName]) then
 						update()
 						return true
 					end
-					if fallbackValue ~= nil then
-						if fallbackValue == "__DEFAULT" then
-							fallbackValue = default
-						end
-					else
+					if fallbackValue == nil then
 						fallbackValue = list[1]
+					elseif fallbackValue == "__DEFAULT" then
+						fallbackValue = default
 					end
-					if multiselect and type(fallbackValue) ~= "table" then
+					if multiselect and (type(fallbackValue) ~= "table") then
 						fallbackValue = {fallbackValue}
 					end
 					return Set(fallbackValue)
@@ -5032,12 +5323,12 @@ function library:CreateWindow(options, ...)
 						end
 					end,
 					RawSet = ((multiselect and function(t, dat)
-						if nil == dat and t ~= nil then
+						if (nil == dat) and (t ~= nil) then
 							dat = t
 						end
 						local lastv = library_flags[flagName]
-						if not lastv or selectedOption ~= lastv then
-							if lastv and type(lastv) == "table" then
+						if not lastv or (selectedOption ~= lastv) then
+							if lastv and (type(lastv) == "table") then
 								selectedOption = library_flags[flagName]
 							else
 								library_flags[flagName] = selectedOption
@@ -5049,7 +5340,7 @@ function library:CreateWindow(options, ...)
 						if not dat then
 							if #selectedOption ~= 0 then
 								table.clear(selectedOption)
-								if callback then
+								if callback and __runscript then
 									task.spawn(callback, selectedOption, cloned)
 								end
 							end
@@ -5063,18 +5354,14 @@ function library:CreateWindow(options, ...)
 								table.remove(dat, k)
 							end
 						end
-						local proceed = #cloned ~= #dat
 						table.clear(selectedOption)
 						for k, v in next, dat do
 							selectedOption[k] = v
-							if not proceed and cloned[k] ~= v then
-								proceed = 1
-							end
 						end
 						update()
 						return selectedOption
 					end) or function(t, str)
-						if nil == str and t then
+						if (nil == str) and t then
 							str = t
 						end
 						selectedOption = str
@@ -5094,7 +5381,7 @@ function library:CreateWindow(options, ...)
 					end
 				}
 				function objectdata.UpdateList(t, listt, updateValues)
-					if (nil == listt and t ~= nil) or (type(t) == "table" and type(listt) ~= "table") then
+					if ((nil == listt) and (t ~= nil)) or ((type(t) == "table") and (type(listt) ~= "table")) then
 						listt, updateValues = t, listt
 					end
 					if listt == objectdata then
@@ -5113,8 +5400,12 @@ function library:CreateWindow(options, ...)
 						validate()
 					end
 					if showing then
+						local Og = realDropdownHolder.CanvasPosition
 						display(false)
 						display(true)
+						if Og.Y > 0 then
+							realDropdownHolder.CanvasPosition = Vector2.yAxis * math.clamp(Og.Y, 0, realDropdownHolder.AbsoluteCanvasSize.Y)
+						end
 					end
 					return list
 				end
@@ -5126,12 +5417,13 @@ function library:CreateWindow(options, ...)
 			sectionFunctions.SearchBox = sectionFunctions.AddSearchBox
 			sectionFunctions.CreateSearchbox = sectionFunctions.AddSearchBox
 			sectionFunctions.NewSearchbox = sectionFunctions.AddSearchBox
+			sectionFunctions.AddSearchbox = sectionFunctions.AddSearchBox
 			sectionFunctions.Searchbox = sectionFunctions.AddSearchBox
 			sectionFunctions.Sbox = sectionFunctions.AddSearchBox
 			sectionFunctions.SBox = sectionFunctions.AddSearchBox
 			if isfolder and makefolder and listfiles and readfile and writefile then
 				function sectionFunctions:AddPersistence(options, ...)
-					options = (options and type(options) == "string" and resolvevararg("Tab", options, ...)) or options
+					options = (options and (type(options) == "string") and resolvevararg("Tab", options, ...)) or options
 					local dropdownName, custom_workspace, val, persistiveflags, suffix, callback, loadcallback, savecallback, postload, postsave, flagName = assert(options.Name, "Missing Name for new persistence."), options.Workspace or library.WorkspaceName, options.Value, options.Persistive or options.Flags or "all", options.Suffix, options.Callback, options.LoadCallback, options.SaveCallback, options.PostLoadCallback, options.PostSaveCallback, options.Flag or (function()
 						library.unnamedpersistence = 1 + (library.unnamedpersistence or 0)
 						return "Persistence" .. tostring(library.unnamedpersistence)
@@ -5151,7 +5443,8 @@ function library:CreateWindow(options, ...)
 					local realDropdownHolder = Instance_new("ScrollingFrame")
 					local realDropdownHolderList = Instance_new("UIListLayout")
 					local dropdownEnabled = false
-					if not isfolder("./Pepsi Lib") then
+					if isfolder("./Pepsi Lib") then
+					else
 						makefolder("./Pepsi Lib")
 					end
 					local common_string = "./Pepsi Lib/" .. tostring(custom_workspace or library.WorkspaceName)
@@ -5160,10 +5453,12 @@ function library:CreateWindow(options, ...)
 							custom_workspace = options.Workspace
 							common_string = "./Pepsi Lib/" .. tostring(custom_workspace or library.WorkspaceName)
 						end
-						if not isfolder or not makefolder or not listfiles then
+						if isfolder and makefolder and listfiles then
+						else
 							return {}
 						end
-						if not isfolder(common_string) then
+						if isfolder(common_string) then
+						else
 							if nofold then
 								return {}
 							end
@@ -5184,13 +5479,13 @@ function library:CreateWindow(options, ...)
 					local blankstring = options.BlankValue or options.NoValueString or options.Nothing
 					local selectedObjects = {}
 					local optionCount = 0
-					if blankstring and val == nil then
+					if blankstring and (val == nil) then
 						val = blankstring
 					end
 					local selectedOption = val or blankstring or list[1]
 					newDropdown.Name = "newDropdown"
 					newDropdown.Parent = sectionHolder
-					newDropdown.BackgroundColor3 = Color3.new(1, 1, 1)
+					newDropdown.BackgroundColor3 = WhiteColor3
 					newDropdown.BackgroundTransparency = 1
 					newDropdown.Size = UDim2.new(1, 0, 0, 42)
 					dropdown.Name = "dropdown"
@@ -5224,7 +5519,7 @@ function library:CreateWindow(options, ...)
 					colored[1 + #colored] = {dropdownInner, "ImageColor3", "bottomGradient"}
 					dropdownToggle.Name = "dropdownToggle"
 					dropdownToggle.Parent = dropdown
-					dropdownToggle.BackgroundColor3 = Color3.new(1, 1, 1)
+					dropdownToggle.BackgroundColor3 = WhiteColor3
 					dropdownToggle.BackgroundTransparency = 1
 					dropdownToggle.Position = UDim2.fromScale(0.9, 0.17)
 					dropdownToggle.Rotation = 90
@@ -5234,7 +5529,7 @@ function library:CreateWindow(options, ...)
 					dropdownToggle.ImageColor3 = Color3.fromRGB(171, 171, 171)
 					dropdownSelection.Name = "dropdownSelection"
 					dropdownSelection.Parent = dropdown
-					dropdownSelection.BackgroundColor3 = Color3.new(1, 1, 1)
+					dropdownSelection.BackgroundColor3 = WhiteColor3
 					dropdownSelection.BackgroundTransparency = 1
 					dropdownSelection.Position = UDim2.new(0.0295485705)
 					dropdownSelection.Size = UDim2.fromScale(0.97, 1)
@@ -5248,7 +5543,7 @@ function library:CreateWindow(options, ...)
 					dropdownSelection.TextXAlignment = Enum.TextXAlignment.Left
 					dropdownHeadline.Name = "dropdownHeadline"
 					dropdownHeadline.Parent = newDropdown
-					dropdownHeadline.BackgroundColor3 = Color3.new(1, 1, 1)
+					dropdownHeadline.BackgroundColor3 = WhiteColor3
 					dropdownHeadline.BackgroundTransparency = 1
 					dropdownHeadline.Position = UDim2.fromScale(0.034, 0.03)
 					dropdownHeadline.Size = UDim2.fromOffset(167, 11)
@@ -5288,7 +5583,7 @@ function library:CreateWindow(options, ...)
 					colored[1 + #colored] = {dropdownHolderInner, "ImageColor3", "bottomGradient"}
 					realDropdownHolder.Name = "realDropdownHolder"
 					realDropdownHolder.Parent = dropdownHolderInner
-					realDropdownHolder.BackgroundColor3 = Color3.new(1, 1, 1)
+					realDropdownHolder.BackgroundColor3 = WhiteColor3
 					realDropdownHolder.BackgroundTransparency = 1
 					realDropdownHolder.Selectable = false
 					realDropdownHolder.Size = UDim2ScaleOne
@@ -5315,7 +5610,8 @@ function library:CreateWindow(options, ...)
 						}):Play()
 					end)
 					library.signals[1 + #library.signals] = newDropdown.MouseLeave:Connect(function()
-						if not dropdownEnabled then
+						if dropdownEnabled then
+						else
 							colored_dropdown_BackgroundColor3[3] = "topGradient"
 							colored_dropdown_BackgroundColor3[4] = nil
 							colored_dropdown_ImageColor3[3] = "bottomGradient"
@@ -5345,17 +5641,20 @@ function library:CreateWindow(options, ...)
 									warn("Error sorting list:", h, debug.traceback(""))
 								end
 							end
-							if not didstuff then
+							if didstuff then
+							else
 								table.sort(optionsTable, library.defaultSort)
 							end
 						end
-						if blankstring and (optionsTable[1] ~= blankstring or table.find(optionsTable, blankstring, 2)) then
+						if options.ForceSelect then
+						elseif blankstring and ((optionsTable[1] ~= blankstring) or table.find(optionsTable, blankstring, 2)) then
 							local exists = table.find(optionsTable, blankstring)
 							if exists then
 								for _ = 1, 35 do
 									table.remove(optionsTable, exists)
 									exists = table.find(optionsTable, blankstring)
-									if not exists then
+									if exists then
+									else
 										break
 									end
 								end
@@ -5367,33 +5666,34 @@ function library:CreateWindow(options, ...)
 						realDropdownHolder:ClearAllChildren()
 						realDropdownHolderList.Parent = realDropdownHolder
 						for _, v in next, optionsTable do
-							if not filter or tostring(v):lower():find(dropdownSelection.Text:lower(), 1, true) then
-								optionCount = optionCount + 1
+							if filter then
+							elseif tostring(v):lower():find(dropdownSelection.Text:lower(), 1, true) then
+								optionCount += 1
 								UpdateDropdownHolder()
 								local newOption = Instance_new("ImageLabel")
 								local optionButton = Instance_new("TextButton")
-								if selectedOption == v or not selectedObjects[1] or not selectedObjects[2] then
+								if (selectedOption == v) or not selectedObjects[1] or not selectedObjects[2] then
 									selectedObjects[1] = newOption
 									selectedObjects[2] = optionButton
 								end
 								newOption.Name = "Frame"
 								newOption.Parent = realDropdownHolder
-								newOption.BackgroundColor3 = (selectedOption == v and library.colors.selectedOption or library.colors.topGradient)
+								newOption.BackgroundColor3 = ((selectedOption == v) and library.colors.selectedOption) or library.colors.topGradient
 								newOption.BorderSizePixel = 0
 								newOption.Size = UDim2.fromOffset(202, 18)
 								newOption.Image = "rbxassetid://2454009026"
-								newOption.ImageColor3 = (selectedOption == v and library.colors.unselectedOption or library.colors.bottomGradient)
+								newOption.ImageColor3 = ((selectedOption == v) and library.colors.unselectedOption) or library.colors.bottomGradient
 								optionButton.Name = tostring(v)
 								optionButton.Parent = newOption
 								optionButton.AnchorPoint = Vector2Half
-								optionButton.BackgroundColor3 = Color3.new(1, 1, 1)
+								optionButton.BackgroundColor3 = WhiteColor3
 								optionButton.BackgroundTransparency = 1
 								optionButton.Position = UDim2ScaleHalf
 								optionButton.Size = UDim2.new(1, -10, 1)
 								optionButton.ZIndex = 5
 								optionButton.Font = Enum.Font.Code
-								optionButton.Text = (selectedOption == v and " " .. tostring(v)) or tostring(v)
-								optionButton.TextColor3 = (selectedOption == v and library.colors.main or library.colors.otherElementText)
+								optionButton.Text = ((selectedOption == v) and (" " .. tostring(v))) or tostring(v)
+								optionButton.TextColor3 = ((selectedOption == v) and library.colors.main or library.colors.otherElementText)
 								optionButton.TextSize = 14
 								optionButton.TextXAlignment = Enum.TextXAlignment.Left
 								library.signals[1 + #library.signals] = optionButton.MouseButton1Down:Connect(function()
@@ -5432,7 +5732,7 @@ function library:CreateWindow(options, ...)
 										if submenuOpen then
 											submenuOpen = nil
 										end
-										if callback then
+										if callback and __runscript then
 											task.spawn(callback, selectedOption, last_v)
 										end
 									else
@@ -5470,12 +5770,16 @@ function library:CreateWindow(options, ...)
 							end
 						end
 					end
-					local precisionscrolling, update
-					local showing = false
+					local precisionscrolling, update, showing
 					local function display(dropdownEnabled, f)
-						if submenuOpen == dropdown or submenuOpen == nil then
+						if dropdownEnabled and windowFunctions.CloseDropdown then
+							pcall(windowFunctions.CloseDropdown)
+							windowFunctions.CloseDropdown = nil
+						end
+						if (submenuOpen == dropdown) or (submenuOpen == nil) then
 							if dropdownEnabled then
 								list = resolvelist(true)
+								windowFunctions.CloseDropdown = display
 								AddOptions(list, f)
 								submenuOpen = dropdown
 								restorezindex[newSection] = restorezindex[newSection] or newSection.ZIndex
@@ -5494,7 +5798,8 @@ function library:CreateWindow(options, ...)
 									ImageColor3 = darkenColor(library.colors.main, 2.5)
 								}):Play()
 								dropdownHolderFrame.Visible = true
-								if not options.DisablePrecisionScrolling then
+								if options.DisablePrecisionScrolling then
+								else
 									local upkey = options.ScrollUpButton or library.scrollupbutton or shared.scrollupbutton or Enum.KeyCode.Up
 									local downkey = options.ScrollDownButton or library.scrolldownbutton or shared.scrolldownbutton or Enum.KeyCode.Down
 									precisionscrolling = (precisionscrolling and precisionscrolling:Disconnect() and nil) or userInputService.InputBegan:Connect(function(input)
@@ -5503,8 +5808,8 @@ function library:CreateWindow(options, ...)
 											local isup = code == upkey
 											local isdown = code == downkey
 											if isup or isdown then
-												local txt = userInputService:GetFocusedTextBox()
-												if not txt then
+												if userInputService:GetFocusedTextBox() then
+												else
 													while wait_check() and userInputService:IsKeyDown(code) do
 														realDropdownHolder.CanvasPosition = Vector2:new(math.clamp(realDropdownHolder.CanvasPosition.Y + ((isup and -5) or 5), 0, realDropdownHolder.AbsoluteCanvasSize.Y))
 													end
@@ -5540,7 +5845,8 @@ function library:CreateWindow(options, ...)
 					end
 					local last_v
 					local function Set(t, str)
-						if nil == str and t then
+						if str then
+						elseif (nil == str) and t then
 							str = t
 						end
 						selectedOption = str
@@ -5550,10 +5856,8 @@ function library:CreateWindow(options, ...)
 							options.Location[options.LocationFlag or flagName] = str
 						end
 						local sstr = (selectedOption and tostring(selectedOption)) or blankstring or "No Blank String"
-						if dropdownSelection.Text ~= sstr then
-							dropdownSelection.Text = sstr
-						end
-						if callback and (last_v ~= str or options.AllowDuplicateCalls) then
+						dropdownSelection.Text = sstr
+						if callback and __runscript and ((last_v ~= str) or options.AllowDuplicateCalls) then
 							task.spawn(callback, str, last_v)
 						end
 						return str
@@ -5561,7 +5865,7 @@ function library:CreateWindow(options, ...)
 					if val ~= nil then
 						Set(val)
 					else
-						Set("Filename")
+						Set(options.Placeholder or "Filename")
 					end
 					library.signals[1 + #library.signals] = dropdownSelection.Focused:Connect(function()
 						showing = true
@@ -5583,12 +5887,14 @@ function library:CreateWindow(options, ...)
 						end
 					end)
 					AddOptions(list)
-					local function savestuff(s, get)
-						if not s or type(s) ~= "string" then
+					local function savestuff(s, get, skip_designer)
+						if s and (type(s) == "string") then
+						else
 							s = nil
 						end
 						local rawfile = "json__save"
-						if not get then
+						if get then
+						else
 							local filenameddst = string.gsub(s or dropdownSelection.Text or "", "%W", "")
 							if #filenameddst == 0 then
 								return
@@ -5597,38 +5903,39 @@ function library:CreateWindow(options, ...)
 						end
 						if savecallback then
 							local x, e = pcall(savecallback, rawfile, library_flags[flagName])
-							if not x and e then
+							if x then
+							elseif e then
 								warn("Error while calling the Pre-Save callback:", e, debug.traceback(""))
 							end
 						end
 						local working_with = {}
-						if persistiveflags == 1 or persistiveflags == true or persistiveflags == "*" then
+						if (persistiveflags == 1) or (persistiveflags == true) or (persistiveflags == "*") then
 							persistiveflags = "all"
 						elseif persistiveflags == 2 then
 							persistiveflags = "tab"
 						elseif persistiveflags == 3 then
 							persistiveflags = "section"
 						end
-						if persistiveflags == "all" or persistiveflags == "tab" or persistiveflags == "section" then
-							for cflag, data in next, (persistiveflags == "all" and elements) or (persistiveflags == "tab" and tabFunctions.Flags) or (persistiveflags == "section" and sectionFunctions.Flags) do
-								if data.Type ~= "Persistence" and (designerpersists or string.sub(cflag, 1, 11) ~= "__Designer.") then
+						if (persistiveflags == "all") or (persistiveflags == "tab") or (persistiveflags == "section") then
+							for cflag, data in next, ((persistiveflags == "all") and elements) or ((persistiveflags == "tab") and tabFunctions.Flags) or (persistiveflags == "section" and sectionFunctions.Flags) do
+								if (data.Type ~= "Persistence") and ((not skip_designer and designerpersists) or (string.sub(cflag, 1, 11) ~= "__Designer.")) then
 									working_with[cflag] = data
 								end
 							end
 						elseif type(persistiveflags) == "table" then
 							if #persistiveflags > 0 then
-								local inverted = persistiveflags[0] == false or persistiveflags.Inverted
+								local inverted = (persistiveflags[0] == false) or persistiveflags.Inverted
 								for k, cflag in next, persistiveflags do
 									if k > 0 then
 										local data = elements[cflag]
-										if data and data.Type ~= "Persistence" and (designerpersists or string.sub(cflag, 1, 11) ~= "__Designer.") then
+										if data and (data.Type ~= "Persistence") and ((skip_designer or designerpersists) or (string.sub(cflag, 1, 11) ~= "__Designer.")) then
 											working_with[cflag] = (not inverted and data) or nil
 										end
 									end
 								end
 							else
 								for cflag, persists in next, elements do
-									if persists and (designerpersists or string.sub(cflag, 1, 11) ~= "__Designer.") then
+									if persists and ((skip_designer or designerpersists) or (string.sub(cflag, 1, 11) ~= "__Designer.")) then
 										local data = elements[cflag]
 										if data then
 											working_with[cflag] = data
@@ -5640,20 +5947,38 @@ function library:CreateWindow(options, ...)
 						local saving = {}
 						for cflag in next, working_with do
 							local value = library_flags[cflag]
+							if value and (type(value) == "table") and next(value) then
+								value = table.clone(value)
+								for k, v in next, value do
+									if v and (typeof(v) == "Instance") then
+										local y, o = pcall(GetPath, v)
+										if y and o then
+											value[k] = o
+										end
+									end
+								end
+							end
 							local good, jval
 							if value ~= nil then
 								good, jval = JSONEncode(value)
 							else
 								good, jval = true, "null"
 							end
-							if not good or (jval == "null" and value ~= nil) then
+							if good and ((jval ~= "null") or (value == nil)) then
+							else
 								local typ = typeof(value)
 								if typ == "Color3" then
 									value = (library.rainbowflags[cflag] and "rainbow") or Color3ToHex(value)
+								elseif typ == "Instance" then
+									local y, o = pcall(GetPath, value)
+									if y and o then
+										value = o
+									end
 								end
 								value = tostring(value)
 								good, jval = JSONEncode(value)
-								if not good or (jval == "null" and value ~= nil) then
+								if good and ((jval ~= "null") or (value == nil)) then
+								else
 									warn("Could not save value:", value, debug.traceback(""))
 								end
 							end
@@ -5664,29 +5989,33 @@ function library:CreateWindow(options, ...)
 						local ret
 						local good, content = JSONEncode(saving)
 						if good and content then
-							if not get then
-								if not isfolder(common_string) then
+							if get then
+								ret = content
+							else
+								if isfolder(common_string) then
+								else
 									makefolder(common_string)
 								end
 								writefile(rawfile, content)
-							else
-								ret = content
 							end
 						end
 						if postsave then
 							local x, e = pcall(postsave, rawfile, library_flags[flagName])
-							if not x and e then
+							if x then
+							elseif e then
 								warn("Error while calling the Post-Save callback:", e, debug.traceback(""))
 							end
 						end
 						return ret
 					end
-					local function loadstuff(s, jsonmode, silent)
-						if not s or type(s) ~= "string" then
+					local function loadstuff(s, jsonmode, silent, skip_designer)
+						if s and (type(s) == "string") then
+						else
 							s = nil
 						end
 						local filename = "json__load"
-						if not jsonmode then
+						if jsonmode then
+						else
 							local filenameddst = convertfilename(s or dropdownSelection.Text, nil, "")
 							if #filenameddst == 0 then
 								return
@@ -5695,30 +6024,49 @@ function library:CreateWindow(options, ...)
 						end
 						if loadcallback then
 							local x, e = pcall(loadcallback, (jsonmode and s) or filename, library_flags[flagName])
-							if not x and e then
+							if x then
+							elseif e then
 								warn("Error while calling the Pre-Load callback:", e, debug.traceback(""))
 							end
 						end
 						if jsonmode or not isfile or isfile(filename) then
 							local content = (jsonmode and s) or (not jsonmode and readfile(filename))
-							if content and #content > 1 then
+							if content and (#content > 1) then
 								local good, jcontent = JSONDecode(content)
 								if good and jcontent then
 									for cflag, val in next, jcontent do
-										if val and type(val) == "string" and #val > 7 and #val < 64 and string.sub(val, 1, 5) == "Enum." then
-											local e = string.find(val, ".", 6, true)
-											if e then
-												local en = Enum[string.sub(val, 6, e - 1)]
-												en = en and en[string.sub(val, e + 1)]
-												if en then
-													val = en
-												else
-													warn("Tried & failed to convert '" .. val .. "' to EnumItem")
+										if skip_designer and (string.sub(tostring(cflag), 1, 11) == "__Designer.") then
+											continue
+										end
+										if val then
+											if (type(val) == "string") and (#val > 4) then
+												if (#val > 7) and (#val < 64) and (string.sub(val, 1, 5) == "Enum.") then
+													local e = string.find(val, ".", 6, true)
+													if e then
+														local en = Enum[string.sub(val, 6, e - 1)]
+														en = en and en[string.sub(val, e + 1)]
+														if en then
+															val = en
+														else
+															warn("Tried & failed to convert '" .. val .. "' to EnumItem")
+														end
+													end
+												elseif (string.sub(val, 1, 15) == "%5D%5B%7C%2B%7C") or (string.sub(val, 1, 5) == "][|+|") then
+													local y, o = pcall(ResolvePath, val)
+													val = (y and o) or nil
+												end
+											elseif (type(val) == "table") and next(val) then
+												val = table.clone(val)
+												for k, v in next, val do
+													if v and (type(v) == "string") and ((string.sub(v, 1, 15) == "%5D%5B%7C%2B%7C") or (string.sub(v, 1, 5) == "][|+|")) then
+														local y, o = pcall(ResolvePath, v)
+														val[k] = (y and o) or nil
+													end
 												end
 											end
 										end
 										local data = elements[cflag]
-										if data and data.Type ~= "Persistence" then
+										if data and (data.Type ~= "Persistence") then
 											if silent and data.RawSet then
 												data:RawSet(val)
 											elseif data.Set then
@@ -5733,7 +6081,8 @@ function library:CreateWindow(options, ...)
 						end
 						if postload then
 							local x, e = pcall(postload, filename, library_flags[flagName])
-							if not x and e then
+							if x then
+							elseif e then
 								warn("Error while calling the Post-Load callback:", e, debug.traceback(""))
 							end
 						end
@@ -5751,7 +6100,7 @@ function library:CreateWindow(options, ...)
 							local buttonName, callback = options.Name, options.Callback
 							local realButton = Instance_new("TextButton")
 							realButton.Name = "realButton"
-							realButton.BackgroundColor3 = Color3.new(1, 1, 1)
+							realButton.BackgroundColor3 = WhiteColor3
 							realButton.BackgroundTransparency = 1
 							realButton.Size = UDim2ScaleOne
 							realButton.ZIndex = 5
@@ -5769,7 +6118,7 @@ function library:CreateWindow(options, ...)
 							local button = Instance_new("ImageLabel")
 							newButton.Name = removeSpaces((buttonName and buttonName:lower() or "???") .. "Holder")
 							newButton.Parent = sectionHolder
-							newButton.BackgroundColor3 = Color3.new(1, 1, 1)
+							newButton.BackgroundColor3 = WhiteColor3
 							newButton.BackgroundTransparency = 1
 							newButton.Size = UDim2.new(1, 0, 0, 24)
 							button.Name = "button"
@@ -5804,14 +6153,36 @@ function library:CreateWindow(options, ...)
 							colored[1 + #colored] = {buttonInner, "ImageColor3", "bottomGradient"}
 							button.Size = UDim2.fromOffset(textsize, 18)
 							realButton.Parent = button
-							offset = offset + textsize + 6
+							offset += textsize + 6
 							sectionFunctions:Update()
 							local presses = 0
-							library.signals[1 + #library.signals] = realButton.MouseButton1Click:Connect(function()
-								if not library.colorpicker and not submenuOpen then
-									presses = 1 + presses
-									task.spawn(callback, presses)
+							local function do_callback(f, c)
+								local callback = f or options.Callback or callback
+								local c = c or options.Condition
+								if (c ~= nil) and (type(c) == "function") and __runscript then
+									local v, e = pcall(c, presses)
+									if e then
+										if v then
+										else
+											warn(debug.traceback(string.format("Error in button %s's Condition function: %s", buttonName, e), 2))
+										end
+									else
+										return
+									end
 								end
+								if submenuOpen or library.colorpicker then
+								else
+									presses = 1 + presses
+									if callback and __runscript then
+										task.spawn(callback, presses)
+									end
+								end
+							end
+							library.signals[1 + #library.signals] = realButton.MouseButton1Click:Connect(function()
+								return do_callback()
+							end)
+							library.signals[1 + #library.signals] = realButton.MouseButton2Click:Connect(function()
+								return do_callback(options.CallbackRight, options.ConditionRight)
 							end)
 							library.signals[1 + #library.signals] = button.MouseEnter:Connect(function()
 								colored_button_BackgroundColor3[3] = "main"
@@ -5839,9 +6210,6 @@ function library:CreateWindow(options, ...)
 					function update()
 						dropdownName, custom_workspace, persistiveflags, suffix, callback, loadcallback, savecallback, postload, postsave = options.Name or dropdownName, options.Workspace or library.WorkspaceName, options.Persistive or options.Flags or "all", options.Suffix, options.Callback, options.LoadCallback, options.SaveCallback, options.PostLoadCallback, options.PostSaveCallback
 						local sstr = tostring(library_flags[flagName])
-						if dropdownSelection.Text ~= sstr then
-							dropdownSelection.Text = sstr
-						end
 						dropdownHeadline.Text = (dropdownName and tostring(dropdownName)) or "???"
 						return sstr
 					end
@@ -5868,56 +6236,57 @@ function library:CreateWindow(options, ...)
 								sectionFunctions:Update()
 							end
 						end,
-						SaveFile = function(t, str, ret)
+						SaveFile = function(t, str, ret, skip_designer)
 							if t ~= nil and type(t) ~= "table" then
 								str, ret = t, str
 							end
 							if type(str) == "string" then
 								str = str:match("(.+)%..+$") or str
 							end
-							return savestuff(str, ret)
+							return savestuff(str, ret, skip_designer)
 						end,
-						LoadFile = function(t, str, jsonmode)
-							if t ~= nil and type(t) ~= "table" then
+						LoadFile = function(t, str, jsonmode, skip_designer)
+							if (t ~= nil) and (type(t) ~= "table") then
 								str, jsonmode = t, str
 							end
 							if isfile and isfile(str) then
-								return loadstuff(readfile(str), true)
-							elseif not jsonmode and type(str) == "string" then
+								return loadstuff(readfile(str), true, nil, skip_designer)
+							elseif jsonmode then
+							elseif type(str) == "string" then
 								str = str:match("(.+)%..+$") or str
 							end
-							return loadstuff(str, jsonmode)
+							return loadstuff(str, jsonmode, nil, skip_designer)
 						end,
-						LoadJSON = function(_, json)
-							return loadstuff(json, true)
+						LoadJSON = function(_, json, skip_designer)
+							return loadstuff(json, true, nil, skip_designer)
 						end,
-						LoadFileRaw = function(t, str, jsonmode)
-							if t ~= nil and type(t) ~= "table" then
+						LoadFileRaw = function(t, str, jsonmode, skip_designer)
+							if (t ~= nil) and (type(t) ~= "table") then
 								str, jsonmode = t, str
 							end
 							if isfile and isfile(str) then
-								return loadstuff(readfile(str), true, true)
-							elseif not jsonmode and type(str) == "string" then
+								return loadstuff(readfile(str), true, true, skip_designer)
+							elseif not jsonmode and (type(str) == "string") then
 								str = str:match("(.+)%..+$") or str
 							end
-							return loadstuff(str, jsonmode, true)
+							return loadstuff(str, jsonmode, true, skip_designer)
 						end,
-						LoadJSONRaw = function(_, json)
-							return loadstuff(json, true, true)
+						LoadJSONRaw = function(_, json, skip_designer)
+							return loadstuff(json, true, true, skip_designer)
 						end,
-						GetJSON = function(t, clipboard)
-							if nil == clipboard and t ~= nil then
+						GetJSON = function(t, clipboard, skip_designer)
+							if (nil == clipboard) and (t ~= nil) then
 								clipboard = t
 							end
-							local json = savestuff(nil, true)
-							local clipfunc = (clipboard and type(clipboard) == "function" and clipboard) or setclipboard
+							local json = savestuff(nil, true, skip_designer)
+							local clipfunc = (clipboard and (type(clipboard) == "function") and clipboard) or setclipboard
 							if clipboard and clipfunc then
 								clipfunc(json)
 							end
 							return json
 						end,
 						RawSet = function(t, str)
-							if nil == str and t ~= nil then
+							if (nil == str) and (t ~= nil) then
 								str = t
 							end
 							selectedOption = str
@@ -5942,9 +6311,12 @@ function library:CreateWindow(options, ...)
 				end
 			else
 				function sectionFunctions.AddPersistence()
-					if not library.warnedpersistance then
+					if library.warnedpersistance then
+					else
 						library.warnedpersistance = 1
-						warn(debug.traceback("Persistance not supported"))
+						warn(debug.traceback("Persistance not supported. Missing some file functions."))
+						warn("Looking for functions: isfolder  makefolder  listfiles  readfile  writefile")
+						warn((isfolder and "") or "\nMissing isfolder", (makefolder and "\n") or "\nMissing makefolder", (listfiles and "") or "\nMissing listfiles", (readfile and "") or "\nMissing readfile", (writefile and "") or "\nMissing writefile")
 					end
 					function sectionFunctions.AddPersistence()
 					end
@@ -5957,8 +6329,8 @@ function library:CreateWindow(options, ...)
 			sectionFunctions.SaveLoad = sectionFunctions.AddPersistence
 			sectionFunctions.SL = sectionFunctions.AddPersistence
 			function sectionFunctions:AddDropdown(options, ...)
-				options = (options and type(options) == "string" and resolvevararg("Dropdown", options, ...)) or options
-				local dropdownName, listt, val, callback, flagName = assert(options.Name, "Missing Name for new searchbox."), assert(options.List, "Missing List for new searchbox."), options.Value, options.Callback, options.Flag or (function()
+				options = (options and (type(options) == "string") and resolvevararg("Dropdown", options, ...)) or options
+				local dropdownName, listt, val, callback, flagName = assert(options.Name, "Missing Name for new dropdown."), assert(options.List, "Missing List for new dropdown."), options.Value, options.Callback, options.Flag or (function()
 					library.unnameddropdown = 1 + (library.unnameddropdown or 0)
 					return "Dropdown" .. tostring(library.unnameddropdown)
 				end)()
@@ -5999,14 +6371,15 @@ function library:CreateWindow(options, ...)
 				if val ~= nil then
 					selectedOption = val
 				end
-				if multiselect and (not selectedOption or (type(selectedOption) ~= "table")) then
+				if selectedOption and (type(selectedOption) == "table") then
+				elseif multiselect then
 					selectedOption = {}
 				end
 				local selectedObjects = {}
 				local optionCount = 0
 				newDropdown.Name = "newDropdown"
 				newDropdown.Parent = sectionHolder
-				newDropdown.BackgroundColor3 = Color3.new(1, 1, 1)
+				newDropdown.BackgroundColor3 = WhiteColor3
 				newDropdown.BackgroundTransparency = 1
 				newDropdown.Size = UDim2.new(1, 0, 0, 42)
 				dropdown.Name = "dropdown"
@@ -6040,7 +6413,7 @@ function library:CreateWindow(options, ...)
 				colored[1 + #colored] = {dropdownInner, "ImageColor3", "bottomGradient"}
 				dropdownToggle.Name = "dropdownToggle"
 				dropdownToggle.Parent = dropdown
-				dropdownToggle.BackgroundColor3 = Color3.new(1, 1, 1)
+				dropdownToggle.BackgroundColor3 = WhiteColor3
 				dropdownToggle.BackgroundTransparency = 1
 				dropdownToggle.Position = UDim2.fromScale(0.9, 0.17)
 				dropdownToggle.Rotation = 90
@@ -6051,26 +6424,21 @@ function library:CreateWindow(options, ...)
 				dropdownSelection.Name = "dropdownSelection"
 				dropdownSelection.Parent = dropdown
 				dropdownSelection.Active = true
-				dropdownSelection.BackgroundColor3 = Color3.new(1, 1, 1)
+				dropdownSelection.BackgroundColor3 = WhiteColor3
 				dropdownSelection.BackgroundTransparency = 1
 				dropdownSelection.Position = UDim2.new(0.0295)
 				dropdownSelection.Selectable = true
 				dropdownSelection.Size = UDim2.fromScale(0.97, 1)
 				dropdownSelection.ZIndex = 5
 				dropdownSelection.Font = Enum.Font.Code
-				local resolvedstr = "Pepsi is cool"
-				if multiselect then
-					if passed_multiselect == "string" then
-					end
-				end
-				dropdownSelection.Text = resolvedstr
+				dropdownSelection.Text = ResolveDropdownItemName(multiselect, passed_multiselect, options.Name, selectedOption, flagName, blankstring)
 				dropdownSelection.TextColor3 = library.colors.otherElementText
 				colored[1 + #colored] = {dropdownSelection, "TextColor3", "otherElementText"}
 				dropdownSelection.TextSize = 14
 				dropdownSelection.TextXAlignment = Enum.TextXAlignment.Left
 				dropdownHeadline.Name = "dropdownHeadline"
 				dropdownHeadline.Parent = newDropdown
-				dropdownHeadline.BackgroundColor3 = Color3.new(1, 1, 1)
+				dropdownHeadline.BackgroundColor3 = WhiteColor3
 				dropdownHeadline.BackgroundTransparency = 1
 				dropdownHeadline.Position = UDim2.fromScale(0.034, 0.03)
 				dropdownHeadline.Size = UDim2.fromOffset(167, 11)
@@ -6110,7 +6478,7 @@ function library:CreateWindow(options, ...)
 				colored[1 + #colored] = {dropdownHolderInner, "ImageColor3", "bottomGradient"}
 				realDropdownHolder.Name = "realDropdownHolder"
 				realDropdownHolder.Parent = dropdownHolderInner
-				realDropdownHolder.BackgroundColor3 = Color3.new(1, 1, 1)
+				realDropdownHolder.BackgroundColor3 = WhiteColor3
 				realDropdownHolder.BackgroundTransparency = 1
 				realDropdownHolder.Selectable = false
 				realDropdownHolder.Size = UDim2ScaleOne
@@ -6126,7 +6494,7 @@ function library:CreateWindow(options, ...)
 				realDropdownHolderList.HorizontalAlignment = Enum.HorizontalAlignment.Center
 				realDropdownHolderList.SortOrder = Enum.SortOrder.LayoutOrder
 				sectionFunctions:Update()
-				local showing = false
+				local showing
 				local function UpdateDropdownHolder()
 					if optionCount >= 6 then
 						realDropdownHolder.CanvasSize = UDim2:fromOffset(realDropdownHolderList.AbsoluteContentSize.Y + 2)
@@ -6172,17 +6540,19 @@ function library:CreateWindow(options, ...)
 									end
 								end
 							end)
+							library.signals[1 + #library.signals] = Signal
 						end
 					end
 				end
 				local restorezindex = {}
 				local Set = (multiselect and function(t, dat)
-					if nil == dat and t ~= nil then
+					if (nil == dat) and (t ~= nil) then
 						dat = t
 					end
 					local lastv = library_flags[flagName]
-					if not lastv or selectedOption ~= lastv then
-						if lastv and type(lastv) == "table" then
+					if lastv and (selectedOption == lastv) then
+					else
+						if lastv and (type(lastv) == "table") then
 							selectedOption = library_flags[flagName]
 						else
 							library_flags[flagName] = selectedOption
@@ -6194,7 +6564,7 @@ function library:CreateWindow(options, ...)
 					if not dat then
 						if #selectedOption ~= 0 then
 							table.clear(selectedOption)
-							if callback then
+							if callback and __runscript then
 								task.spawn(callback, selectedOption, cloned)
 							end
 						end
@@ -6212,12 +6582,13 @@ function library:CreateWindow(options, ...)
 					table.clear(selectedOption)
 					for k, v in next, dat do
 						selectedOption[k] = v
-						if not proceed and cloned[k] ~= v then
+						if proceed then
+						elseif cloned[k] ~= v then
 							proceed = 1
 						end
 					end
-					dropdownSelection.Text = (passed_multiselect == "string" and multiselect) or tostring(blankstring or "Select Item(s)")
-					if proceed and callback then
+					dropdownSelection.Text = ResolveDropdownItemName(multiselect, passed_multiselect, options.Name, selectedOption, flagName, blankstring)
+					if proceed and callback and __runscript then
 						task.spawn(callback, selectedOption, cloned)
 					end
 					if options.AutoValidate then
@@ -6225,7 +6596,7 @@ function library:CreateWindow(options, ...)
 					end
 					return selectedOption
 				end) or function(t, str)
-					if nil == str and t ~= nil then
+					if (nil == str) and (t ~= nil) then
 						str = t
 					end
 					local last_v = library_flags[flagName]
@@ -6234,11 +6605,8 @@ function library:CreateWindow(options, ...)
 					if options.Location then
 						options.Location[options.LocationFlag or flagName] = str
 					end
-					local sstr = (selectedOption and tostring(selectedOption)) or blankstring or "No Blank String"
-					if dropdownSelection.Text ~= sstr then
-						dropdownSelection.Text = sstr
-					end
-					if callback and (last_v ~= str or options.AllowDuplicateCalls) then
+					dropdownSelection.Text = ResolveDropdownItemName(multiselect, passed_multiselect, options.Name, selectedOption, flagName, blankstring)
+					if callback and __runscript and ((last_v ~= str) or options.AllowDuplicateCalls) then
 						task.spawn(callback, str, last_v)
 					end
 					if options.AutoValidate then
@@ -6280,7 +6648,8 @@ function library:CreateWindow(options, ...)
 							for _ = 1, 35 do
 								table.remove(optionsTable, exists)
 								exists = table.find(optionsTable, blankstring)
-								if not exists then
+								if exists then
+								else
 									break
 								end
 							end
@@ -6301,7 +6670,7 @@ function library:CreateWindow(options, ...)
 						end
 						newOption.Name = "Frame"
 						newOption.Parent = realDropdownHolder
-						local togged = (not multiselect and selectedOption == v) or (multiselect and table.find(selectedOption, v))
+						local togged = (not multiselect and (selectedOption == v)) or (multiselect and table.find(selectedOption, v))
 						newOption.BackgroundColor3 = (togged and library.colors.selectedOption) or library.colors.topGradient
 						newOption.BorderSizePixel = 0
 						newOption.Size = UDim2.fromOffset(202, 18)
@@ -6311,7 +6680,7 @@ function library:CreateWindow(options, ...)
 						optionButton.Name = stringed
 						optionButton.Parent = newOption
 						optionButton.AnchorPoint = Vector2Half
-						optionButton.BackgroundColor3 = Color3.new(1, 1, 1)
+						optionButton.BackgroundColor3 = WhiteColor3
 						optionButton.BackgroundTransparency = 1
 						optionButton.Position = UDim2ScaleHalf
 						optionButton.Size = UDim2.new(1, -10, 1)
@@ -6340,22 +6709,24 @@ function library:CreateWindow(options, ...)
 									newOption.BackgroundColor3 = (togged and library.colors.selectedOption) or library.colors.topGradient
 									newOption.ImageColor3 = (togged and library.colors.unselectedOption) or library.colors.bottomGradient
 									optionButton.TextColor3 = (togged and library.colors.main) or library.colors.otherElementText
-									dropdownSelection.Text = (passed_multiselect == "string" and multiselect) or tostring(blankstring or "Select Item(s)")
-									if callback then
-										task.spawn(callback, selectedOption, cloned)
-									end
-									if togged then
-										if addcallback then
-											task.spawn(addcallback, v, selectedOption)
+									dropdownSelection.Text = ((passed_multiselect == "string") and multiselect) or tostring(blankstring or "Select Item(s)")
+									if __runscript then
+										if callback and __runscript then
+											task.spawn(callback, selectedOption, cloned)
 										end
-									elseif delcallback then
-										task.spawn(delcallback, v, selectedOption)
-									end
-									if modcallback then
-										task.spawn(modcallback, v, togged, selectedOption)
-									end
-									if #selectedOption == 0 and clrcallback then
-										task.spawn(clrcallback, selectedOption, cloned)
+										if togged then
+											if addcallback and __runscript then
+												task.spawn(addcallback, v, selectedOption)
+											end
+										elseif delcallback and __runscript then
+											task.spawn(delcallback, v, selectedOption)
+										end
+										if modcallback and __runscript then
+											task.spawn(modcallback, v, togged, selectedOption)
+										end
+										if (#selectedOption == 0) and clrcallback and __runscript then
+											task.spawn(clrcallback, selectedOption, cloned)
+										end
 									end
 									return
 								else
@@ -6391,7 +6762,7 @@ function library:CreateWindow(options, ...)
 										end
 										submenuOpen = nil
 										showing = false
-										if callback then
+										if callback and __runscript then
 											task.spawn(callback, selectedOption, last_v)
 										end
 									else
@@ -6434,6 +6805,10 @@ function library:CreateWindow(options, ...)
 				end
 				local precisionscrolling, update
 				local function display(dropdownEnabled)
+					if dropdownEnabled and windowFunctions.CloseDropdown then
+						pcall(windowFunctions.CloseDropdown)
+						windowFunctions.CloseDropdown = nil
+					end
 					list = resolvelist()
 					if next(list) then
 					else
@@ -6443,6 +6818,7 @@ function library:CreateWindow(options, ...)
 						end
 					end
 					if dropdownEnabled then
+						windowFunctions.CloseDropdown = display
 						AddOptions(list)
 						submenuOpen = dropdown
 						dropdownToggle.Rotation = 270
@@ -6461,7 +6837,8 @@ function library:CreateWindow(options, ...)
 							ImageColor3 = darkenColor(library.colors.main, 2.5)
 						}):Play()
 						dropdownHolderFrame.Visible = true
-						if not options.DisablePrecisionScrolling then
+						if options.DisablePrecisionScrolling then
+						else
 							local upkey = options.ScrollUpButton or library.scrollupbutton or shared.scrollupbutton or Enum.KeyCode.Up
 							local downkey = options.ScrollDownButton or library.scrolldownbutton or shared.scrolldownbutton or Enum.KeyCode.Down
 							precisionscrolling = (precisionscrolling and precisionscrolling:Disconnect() and nil) or userInputService.InputBegan:Connect(function(input)
@@ -6471,7 +6848,8 @@ function library:CreateWindow(options, ...)
 									local isdown = code == downkey
 									if isup or isdown then
 										local txt = userInputService:GetFocusedTextBox()
-										if not txt or (txt == dropdownSelection) then
+										if txt and (txt ~= dropdownSelection) then
+										else
 											while wait_check() and userInputService:IsKeyDown(code) do
 												realDropdownHolder.CanvasPosition = Vector2:new(math.clamp(realDropdownHolder.CanvasPosition.Y + ((isup and -5) or 5), 0, realDropdownHolder.AbsoluteCanvasSize.Y))
 											end
@@ -6498,7 +6876,8 @@ function library:CreateWindow(options, ...)
 						end
 						precisionscrolling = (precisionscrolling and precisionscrolling:Disconnect() and nil) or nil
 					end
-					if not multiselect and (not next(list) or not table.find(list, library_flags[flagName])) then
+					if multiselect or (next(list) and table.find(list, library_flags[flagName])) then
+					else
 						Set(list[1])
 					end
 					showing = dropdownEnabled
@@ -6542,15 +6921,11 @@ function library:CreateWindow(options, ...)
 					end
 				end)
 				AddOptions(list)
-				local default = library_flags[flagName]
 				function update()
 					dropdownName, callback = options.Name or dropdownName, options.Callback
-					local sstr = (passed_multiselect == "string" and multiselect) or (library_flags[flagName] and tostring(library_flags[flagName])) or (selectedOption and tostring(selectedOption)) or blankstring or "nil"
-					if dropdownSelection.Text ~= sstr then
-						dropdownSelection.Text = sstr
-					end
+					dropdownSelection.Text = ResolveDropdownItemName(multiselect, passed_multiselect, options.Name, selectedOption, flagName, blankstring)
 					dropdownHeadline.Text = (dropdownName and tostring(dropdownName)) or "???"
-					return sstr
+					return dropdownSelection.Text
 				end
 				function validate(fallbackValue)
 					if list and table.find(list, library_flags[flagName]) then
@@ -6565,6 +6940,10 @@ function library:CreateWindow(options, ...)
 						fallbackValue = list[1]
 					end
 					return Set((multiselect and {fallbackValue}) or fallbackValue)
+				end
+				local default = library_flags[flagName]
+				if type(default) == "table" then
+					default = table.clone(default)
 				end
 				local objectdata = {
 					Options = options,
@@ -6589,7 +6968,8 @@ function library:CreateWindow(options, ...)
 							dat = t
 						end
 						local lastv = library_flags[flagName]
-						if not lastv or selectedOption ~= lastv then
+						if lastv and (selectedOption == lastv) then
+						else
 							if lastv and type(lastv) == "table" then
 								selectedOption = library_flags[flagName]
 							else
@@ -6619,7 +6999,7 @@ function library:CreateWindow(options, ...)
 						end
 						return selectedOption
 					end) or function(t, str)
-						if nil == str and t ~= nil then
+						if (nil == str) and (t ~= nil) then
 							str = t
 						end
 						selectedOption = str
@@ -6655,8 +7035,12 @@ function library:CreateWindow(options, ...)
 						validate()
 					end
 					if showing then
+						local Og = realDropdownHolder.CanvasPosition
 						display(false)
 						display(true)
+						if Og.Y > 0 then
+							realDropdownHolder.CanvasPosition = Vector2.yAxis * math.clamp(Og.Y, 0, realDropdownHolder.AbsoluteCanvasSize.Y)
+						end
 					end
 					return list
 				end
@@ -6692,7 +7076,7 @@ function library:CreateWindow(options, ...)
 				if presetColor == "random" then
 					presetColor = Color3.new(math.random(), math.random(), math.random())
 				elseif presetColor == "rainbow" then
-					presetColor = Color3.new(1, 1, 1)
+					presetColor = WhiteColor3
 					rainbowColorMode = true
 				end
 				local newColorPicker = Instance_new("Frame")
@@ -6716,7 +7100,7 @@ function library:CreateWindow(options, ...)
 				local rainbow = Instance_new("ImageLabel")
 				local rainbowInner = Instance_new("ImageLabel")
 				local rainbowButton = Instance_new("ImageButton")
-				local startingColor = presetColor or Color3.new(1, 1, 1)
+				local startingColor = presetColor or WhiteColor3
 				local colorPickerEnabled = false
 				local colorH, colorS, colorV = 1, 1, 1
 				local colorInput, hueInput
@@ -6726,7 +7110,7 @@ function library:CreateWindow(options, ...)
 				local rainbowColorValue = 0
 				newColorPicker.Name = "newColorPicker"
 				newColorPicker.Parent = sectionHolder
-				newColorPicker.BackgroundColor3 = Color3.new(1, 1, 1)
+				newColorPicker.BackgroundColor3 = WhiteColor3
 				newColorPicker.BackgroundTransparency = 1
 				newColorPicker.Size = UDim2.new(1, 0, 0, 19)
 				colorPicker.Name = "colorPicker"
@@ -6758,7 +7142,7 @@ function library:CreateWindow(options, ...)
 				colorPickerInner.ImageColor3 = darkenColor(startingColor, 2.5)
 				colorPickerHeadline.Name = "colorPickerHeadline"
 				colorPickerHeadline.Parent = newColorPicker
-				colorPickerHeadline.BackgroundColor3 = Color3.new(1, 1, 1)
+				colorPickerHeadline.BackgroundColor3 = WhiteColor3
 				colorPickerHeadline.BackgroundTransparency = 1
 				colorPickerHeadline.Position = UDim2.fromScale(0.034, 0.113)
 				colorPickerHeadline.Size = UDim2.fromOffset(173, 11)
@@ -6770,7 +7154,7 @@ function library:CreateWindow(options, ...)
 				colorPickerHeadline.TextXAlignment = Enum.TextXAlignment.Left
 				colorPickerButton.Name = "colorPickerButton"
 				colorPickerButton.Parent = newColorPicker
-				colorPickerButton.BackgroundColor3 = Color3.new(1, 1, 1)
+				colorPickerButton.BackgroundColor3 = WhiteColor3
 				colorPickerButton.BackgroundTransparency = 1
 				colorPickerButton.Size = UDim2ScaleOne
 				colorPickerButton.ZIndex = 5
@@ -6802,15 +7186,19 @@ function library:CreateWindow(options, ...)
 					end
 					local pos = 1 - (Color3.toHSV(newColor))
 					local scalex = selectorHue.Position.X.Scale
-					if scalex ~= pos and not (((pos == 0) or (pos == 1)) and ((scalex == 1) or (scalex == 0))) then
+					if (scalex ~= pos) and not (((pos == 0) or (pos == 1)) and ((scalex == 1) or (scalex == 0))) then
 						selectorHue.Position = UDim2.new(pos)
 					end
-					if callback and last_vv ~= newColor then
+					if callback and __runscript and (last_vv ~= newColor) then
 						task.spawn(callback, newColor, last_vv, rainbsow)
 					end
 				end
 				library.signals[1 + #library.signals] = colorPickerButton.MouseButton1Click:Connect(function()
-					if submenuOpen == colorPicker or submenuOpen == nil then
+					if windowFunctions.CloseDropdown then
+						pcall(windowFunctions.CloseDropdown)
+						windowFunctions.CloseDropdown = nil
+					end
+					if (submenuOpen == colorPicker) or (submenuOpen == nil) then
 						colorPickerEnabled = not colorPickerEnabled
 						library.colorpicker = colorPickerEnabled
 						colorPickerHolderFrame.Visible = colorPickerEnabled
@@ -6883,7 +7271,7 @@ function library:CreateWindow(options, ...)
 				selectorColor.Size = UDim2.fromOffset(4, 4)
 				hue.Name = "hue"
 				hue.Parent = colorPickerHolderInner
-				hue.BackgroundColor3 = Color3.new(1, 1, 1)
+				hue.BackgroundColor3 = WhiteColor3
 				hue.BorderSizePixel = 0
 				hue.Position = UDim2.fromOffset(5, 202)
 				hue.Size = UDim2.new(1, -10, 0, 14)
@@ -6929,7 +7317,7 @@ function library:CreateWindow(options, ...)
 				colored[1 + #colored] = {hexInputInner, "ImageColor3", "bottomGradient"}
 				hexInputBox.Name = "hexInputBox"
 				hexInputBox.Parent = hexInput
-				hexInputBox.BackgroundColor3 = Color3.new(1, 1, 1)
+				hexInputBox.BackgroundColor3 = WhiteColor3
 				hexInputBox.BackgroundTransparency = 1
 				hexInputBox.Size = UDim2ScaleOne
 				hexInputBox.ZIndex = 5
@@ -6969,7 +7357,7 @@ function library:CreateWindow(options, ...)
 				colored[1 + #colored] = {randomColorInner, "ImageColor3", "bottomGradient"}
 				randomColorButton.Name = "randomColorButton"
 				randomColorButton.Parent = randomColor
-				randomColorButton.BackgroundColor3 = Color3.new(1, 1, 1)
+				randomColorButton.BackgroundColor3 = WhiteColor3
 				randomColorButton.BackgroundTransparency = 1
 				randomColorButton.Size = UDim2ScaleOne
 				randomColorButton.ZIndex = 5
@@ -7003,7 +7391,7 @@ function library:CreateWindow(options, ...)
 				colored[1 + #colored] = {rainbowInner, "ImageColor3", "bottomGradient"}
 				rainbowButton.Name = "rainbowButton"
 				rainbowButton.Parent = rainbow
-				rainbowButton.BackgroundColor3 = Color3.new(1, 1, 1)
+				rainbowButton.BackgroundColor3 = WhiteColor3
 				rainbowButton.BackgroundTransparency = 1
 				rainbowButton.Size = UDim2ScaleOne
 				rainbowButton.ZIndex = 5
@@ -7043,7 +7431,7 @@ function library:CreateWindow(options, ...)
 							oldColor = color.BackgroundColor3
 							pcall(function()
 								local common_float = 1 / 255
-								while wait_check() and rainbowColorMode and (options.Value == "rainbow" or ((not designers and not destroyrainbowsg) or (designers and not destroyrainbows))) do
+								while wait_check() and rainbowColorMode and ((options.Value == "rainbow") or (not (designers or destroyrainbowsg) or (designers and not destroyrainbows))) do
 									rainbowColorValue = common_float + rainbowColorValue
 									if rainbowColorValue > 1 then
 										rainbowColorValue = 0
@@ -7055,10 +7443,12 @@ function library:CreateWindow(options, ...)
 						end)
 						pcall(function()
 							rainbowColorMode = nil
-							if library.rainbowflags[flagName] then
-								library[indexwith] = library[indexwith] - 1
+							if __runscript then
+								if library.rainbowflags[flagName] then
+									library[indexwith] = library[indexwith] - 1
+								end
+								library.rainbowflags[flagName] = nil
 							end
-							library.rainbowflags[flagName] = nil
 						end)
 					end
 					UpdateColorPicker(library_flags[flagName])
@@ -7082,7 +7472,8 @@ function library:CreateWindow(options, ...)
 					colored_colorPicker_ImageColor3[4] = 2.5
 				end)
 				library.signals[1 + #library.signals] = newColorPicker.MouseLeave:Connect(function()
-					if not colorPickerEnabled then
+					if colorPickerEnabled then
+					else
 						tweenService:Create(colorPicker, TweenInfo.new(0.25, library.configuration.easingStyle, library.configuration.easingDirection), {
 							BackgroundColor3 = library.colors.topGradient,
 							ImageColor3 = library.colors.bottomGradient
@@ -7093,11 +7484,11 @@ function library:CreateWindow(options, ...)
 						colored_colorPicker_ImageColor3[4] = nil
 					end
 				end)
-				hexInputBox.FocusLost:Connect(function()
+				library.signals[1 + #library.signals] = hexInputBox.FocusLost:Connect(function()
 					if #hexInputBox.Text > 5 then
 						local last_vv = library_flags[flagName]
-						local not_fucked, clr = pcall(Color3FromHex, hexInputBox.Text)
-						UpdateColorPicker((not_fucked and clr) or last_vv)
+						local not_bloxed, clr = pcall(Color3FromHex, hexInputBox.Text)
+						UpdateColorPicker((not_bloxed and clr) or last_vv)
 					end
 				end)
 				colorH = 1 - (math.clamp(selectorHue.AbsolutePosition.X - hue.AbsolutePosition.X, 0, hue.AbsoluteSize.X) / hue.AbsoluteSize.X)
@@ -7141,7 +7532,7 @@ function library:CreateWindow(options, ...)
 					end
 				end)
 				library.signals[1 + #library.signals] = hue.InputEnded:Connect(function(input)
-					if hueInput and input.UserInputType == Enum.UserInputType.MouseButton1 then
+					if hueInput and (input.UserInputType == Enum.UserInputType.MouseButton1) then
 						isDraggingSomething = false
 						hueInput:Disconnect()
 					end
@@ -7179,7 +7570,7 @@ function library:CreateWindow(options, ...)
 					colorPickerInner.ImageColor3 = darkenColor(clr, 2.5)
 					hexInputBox.Text = Color3ToHex(clr)
 					colorH, colorS, colorV = Color3.toHSV(clr)
-					if callback and (last_v ~= clr or options.AllowDuplicateCalls) then
+					if callback and __runscript and ((last_v ~= clr) or options.AllowDuplicateCalls) then
 						task.spawn(callback, clr, last_v)
 					end
 					return clr
@@ -7238,7 +7629,7 @@ function library:CreateWindow(options, ...)
 							return clr
 						elseif clr == "random" then
 							clr = Color3.new(math.random(), math.random(), math.random())
-						elseif clr and type(clr) == "string" and tonumber(clr, 16) then
+						elseif clr and (type(clr) == "string") and tonumber(clr, 16) then
 							clr = Color3FromHex(clr)
 						end
 						task.spawn(setrainbow, false)
@@ -7274,13 +7665,17 @@ function library:CreateWindow(options, ...)
 		tabFunctions.S = tabFunctions.CreateSection
 		function tabFunctions:UpdateAll()
 			local target = self or tabFunctions
-			if target and type(target) == "table" and target.Flags then
+			if target and (type(target) == "table") and target.Flags then
 				for _, e in next, target.Flags do
-					if e and type(e) == "table" and e.Update then
+					if e and (type(e) == "table") and e.Update then
 						pcall(e.Update)
 					end
 				end
 			end
+		end
+		if LastTabWindowSlideThingyOfDeath then
+		else
+			LastTabWindowSlideThingyOfDeath = newTab
 		end
 		return tabFunctions
 	end
@@ -7289,8 +7684,8 @@ function library:CreateWindow(options, ...)
 	windowFunctions.Tab = windowFunctions.CreateTab
 	windowFunctions.T = windowFunctions.CreateTab
 	function windowFunctions:CreateDesigner(options, ...)
-		options = (options and type(options) == "string" and resolvevararg("Tab", options, ...)) or options
 		assert(shared.bypasstablimit or (library.Designer == nil), "Designer already exists")
+		options = (options and type(options) == "string" and resolvevararg("Tab", options, ...)) or options
 		options = options or {}
 		options.Image = options.Image or 7483871523
 		options.LastTab = true
@@ -7324,7 +7719,9 @@ function library:CreateWindow(options, ...)
 					Flag = cflag,
 					Value = library.colors[codename],
 					Callback = function(v, y)
-						library.colors[codename] = v or y
+						if __runscript and library and library.colors then
+							library.colors[codename] = v or y
+						end
 					end,
 					__designer = 1
 				}),
@@ -7349,7 +7746,7 @@ function library:CreateWindow(options, ...)
 		}}, {"AddColorpicker", "__Designer.Colorpicker.ImageColor", backgroundsection, {
 			Name = "Image Color",
 			Flag = "__Designer.Background.ImageColor",
-			Value = Color3.new(1, 1, 1),
+			Value = WhiteColor3,
 			Callback = updatecolorsnotween,
 			__designer = 1
 		}}, {"AddSlider", "__Designer.Slider.ImageTransparency", backgroundsection, {
@@ -7398,6 +7795,26 @@ function library:CreateWindow(options, ...)
 					end
 				end)
 			end
+		}, {
+			Name = "Copy Theme",
+			Callback = function()
+				pcall(function()
+					local JS = elements["__Designer.Files.ThemeFile"]:GetJSON()
+					if userInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+						JS = string.format("%q", JS)
+					end
+					return (setclipboard or shared.clipboard_func or warn)(JS)
+				end)
+			end,
+			CallbackRight = function()
+				pcall(function()
+					local JS = library.GetJSON(nil, nil, true)
+					if userInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+						JS = string.format("%q", JS)
+					end
+					return (setclipboard or shared.clipboard_func or warn)(JS)
+				end)
+			end
 		}}}, {"AddKeybind", "__Designer.Keybind.ShowHideKey", settingssection, {
 			Name = "Show/Hide Key",
 			Location = library.configuration,
@@ -7431,16 +7848,33 @@ function library:CreateWindow(options, ...)
 						local saving = {}
 						for cflag in next, working_with do
 							local value = library_flags[cflag]
+							if value and (type(value) == "table") and next(value) then
+								value = table.clone(value)
+								for k, v in next, value do
+									if v and (typeof(v) == "Instance") then
+										local y, o = pcall(GetPath, v)
+										if y and o then
+											value[k] = o
+										end
+									end
+								end
+							end
 							local good, jval
 							if value ~= nil then
 								good, jval = JSONEncode(value)
 							else
 								good, jval = true, "null"
 							end
-							if not good or ((jval == "null") and (value ~= nil)) then
+							if good and ((jval ~= "null") or (value == nil)) then
+							else
 								local typ = typeof(value)
 								if typ == "Color3" then
 									value = (library.rainbowflags[cflag] and "rainbow") or Color3ToHex(value)
+								elseif typ == "Instance" then
+									local y, o = pcall(GetPath, value)
+									if y and o then
+										value = o
+									end
 								end
 								value = tostring(value)
 								good, jval = JSONEncode(value)
@@ -7486,7 +7920,7 @@ function library:CreateWindow(options, ...)
 		end
 		designerelements["__Designer.Textbox.WorkspaceName"]:Set(library.WorkspaceName or "Unnamed Workspace")
 		for k, v in next, elements do
-			if v and k and string.sub(k, 1, 11) == "__Designer." and v.Type and v.Type ~= "Persistence" then
+			if v and k and (string.sub(k, 1, 11) == "__Designer.") and v.Type and (v.Type ~= "Persistence") then
 				flags[1 + #flags] = k
 			end
 		end
@@ -7494,28 +7928,28 @@ function library:CreateWindow(options, ...)
 			library.Backdrop.Image = resolveid(library_flags["__Designer.Background.ImageAssetID"], "__Designer.Background.ImageAssetID") or ""
 			library.Backdrop.Visible = library_flags["__Designer.Background.UseBackgroundImage"] and true
 			library.Backdrop.ImageTransparency = (library_flags["__Designer.Background.ImageTransparency"] or 95) / 100
-			library.Backdrop.ImageColor3 = library_flags["__Designer.Background.ImageColor"] or Color3.new(1, 1, 1)
+			library.Backdrop.ImageColor3 = library_flags["__Designer.Background.ImageColor"] or WhiteColor3
 		end
 		local function setbackground(t, Asset, Transparency, Visible)
-			if Visible == nil and t ~= nil and type(t) ~= "table" then
+			if (Visible == nil) and (t ~= nil) and (type(t) ~= "table") then
 				Asset, Transparency, Visible = t, Transparency, Visible
 			end
-			if Visible == 0 or ((Asset == 0 or Asset == false) and Visible == nil and Transparency == nil) then
+			if (Visible == 0) or (((Asset == 0) or (Asset == false)) and (Visible == nil) and (Transparency == nil)) then
 				Visible = false
-			elseif Visible == 1 or ((Asset == 1 or Asset == true) and Visible == nil and Transparency == nil) then
+			elseif (Visible == 1) or (((Asset == 1) or (Asset == true)) and (Visible == nil) and (Transparency == nil)) then
 				Visible = true
-			elseif Asset == nil and Transparency == nil and Visible == nil then
+			elseif (Asset == nil) and (Transparency == nil) and (Visible == nil) then
 				Visible = not library_flags["__Designer.Background.UseBackgroundImage"]
 			end
 			local temp = Asset and type(Asset)
-			if Transparency == nil and Visible == nil and temp == "number" and ((Asset ~= 1 and Asset ~= 0) or (Asset > 0 and Asset <= 100)) then
+			if (Transparency == nil) and (Visible == nil) and (temp == "number") and (((Asset ~= 1) and (Asset ~= 0)) or ((Asset > 0) and (Asset <= 100))) then
 				Transparency, Asset, temp = Asset, nil
 			end
-			if temp and ((temp == "number" and Asset > 1) or temp == "string") then
+			if temp and (((temp == "number") and (Asset > 1)) or (temp == "string")) then
 				designerelements["__Designer.Textbox.ImageAssetID"]:Set(Asset)
 			end
 			temp = tonumber(Transparency)
-			temp = (temp >= 0 and temp <= 1 and temp * 100) or temp
+			temp = ((temp >= 0) and (temp <= 1) and (temp * 100)) or temp
 			if temp then
 				designerelements["__Designer.Slider.ImageTransparency"]:Set(temp)
 			end
@@ -7554,29 +7988,37 @@ function library:CreateWindow(options, ...)
 		end
 		spawn(updatecolorsnotween)
 		local dorlod
-		if options.HideTheme then
-			designer.Remove()
-			dorlod = true
-		elseif options.LockTheme then
-			if colorsection then
-				colorsection.Remove()
-				dorlod = true
+		if shared.unlock_designer then
+			if shared.unlock_designer == 2 then
+			else
+				options.HideTheme = nil
+				options.LockTheme = nil
 			end
-			if backgroundsection then
-				backgroundsection.Remove()
+		else
+			if options.HideTheme then
+				designer.Remove()
 				dorlod = true
-			end
-			if designerelements then
-				local thing = designerelements["__Designer.Persistence.ThemeFile"]
-				if thing then
-					thing.Remove()
+			elseif options.LockTheme then
+				if colorsection then
+					colorsection.Remove()
 					dorlod = true
 				end
-				thing = designerelements["__Designer.Button.TerminateGUI"]
-				thing = thing and thing[3]
-				if thing then
-					thing.Remove()
+				if backgroundsection then
+					backgroundsection.Remove()
 					dorlod = true
+				end
+				if designerelements then
+					local thing = designerelements["__Designer.Persistence.ThemeFile"]
+					if thing then
+						thing.Remove()
+						dorlod = true
+					end
+					thing = designerelements["__Designer.Button.TerminateGUI"]
+					thing = thing and thing[3]
+					if thing then
+						thing.Remove()
+						dorlod = true
+					end
 				end
 			end
 		end
@@ -7591,9 +8033,9 @@ function library:CreateWindow(options, ...)
 	windowFunctions.D = windowFunctions.CreateDesigner
 	function windowFunctions:UpdateAll()
 		local target = self or windowFunctions
-		if target and type(target) == "table" and target.Flags then
+		if target and (type(target) == "table") and target.Flags then
 			for _, e in next, target.Flags do
-				if e and type(e) == "table" then
+				if e and (type(e) == "table") then
 					if e.Update then
 						pcall(e.Update)
 					end
@@ -7606,22 +8048,31 @@ function library:CreateWindow(options, ...)
 				if library.Backdrop then
 					library.Backdrop.Visible = library_flags["__Designer.Background.UseBackgroundImage"] and true
 					library.Backdrop.Image = resolveid(library_flags["__Designer.Background.ImageAssetID"], "__Designer.Background.ImageAssetID") or ""
-					library.Backdrop.ImageColor3 = library_flags["__Designer.Background.ImageColor"] or Color3.new(1, 1, 1)
+					library.Backdrop.ImageColor3 = library_flags["__Designer.Background.ImageColor"] or WhiteColor3
 					library.Backdrop.ImageTransparency = (library_flags["__Designer.Background.ImageTransparency"] or 95) / 100
 				end
 			end)
 		end
 	end
 	library.UpdateAll = windowFunctions.UpdateAll
-	if options.Themeable or options.DefaultTheme or options.Theme then
+	if shared.startup_theme then
+		options.DefaultTheme = shared.startup_theme
+	end
+	if shared.auto_load_profile then
+		task.delay(3, function()
+			library.LoadFile(shared.auto_load_profile)
+		end)
+	end
+	if shared.force_designer or options.Themeable or options.DefaultTheme or options.Theme then
 		spawn(function()
 			local os_clock = os.clock
 			local starttime = os_clock()
-			while os_clock() - starttime < 12 do
+			while (os_clock() - starttime) < 12 do
 				if homepage then
 					windowFunctions.GoHome = homepage
 					local x, e = pcall(homepage)
-					if not x and e then
+					if x then
+					elseif e then
 						warn("Error going to Homepage:", e)
 					end
 					x, e = nil
