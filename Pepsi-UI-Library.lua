@@ -8120,7 +8120,7 @@ library.NewWindow = library.CreateWindow
 library.AddWindow = library.CreateWindow
 library.Window = library.CreateWindow
 library.W = library.CreateWindow
-if game["Run Service"]:IsRunning() then
+if game["Run Service"]:IsStudio() then
 	return {library, library_flags, library.subs}
 else
 	return library, library_flags, library.subs
