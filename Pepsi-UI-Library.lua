@@ -502,11 +502,8 @@ local library = {
 	},
 	gui_parent = (function()
 		local x, c = pcall(function()
+			game:GetService("CoreGui").Name = game:GetService("CoreGui").Name
 			return game:GetService("CoreGui")
-		end)
-		x, c = pcall(function()
-			c.Name = c.Name
-			return c
 		end)
 		if x then
 			return c
@@ -531,6 +528,7 @@ local library = {
 	rainbows = 0,
 	rainbowsg = 0
 }
+local CloneRef, setclipboard, readfile, writefile, delfile, appendfile, loadfile, listfiles, isfile, isfolder, makefolder, delfolder, getasset, getnilinstances, toHSV = (cloneref or function(...) return ... end), (setclipboard or to_clipboard), readfile, writefile, delfile, appendfile, loadfile, listfiles, isfile, isfolder, makefolder, delfolder, (getsynasset or getcustomasset), getnilinstances, Color3.toHSV
 library.Subs = library.subs
 local library_flags = library.flags
 library.Flags = library_flags
@@ -558,8 +556,7 @@ library.subs.Wait, library.subs.wait, library.Wait = wait_check, wait_check, wai
 function library.IsGuiValid()
 	return __runscript
 end
-local temp = game:FindService("MarketplaceService") or game:GetService("MarketplaceService")
-local Marketplace = (temp and (cloneref and cloneref(temp))) or temp
+local Marketplace = CloneRef(game:FindService("MarketplaceService") or game:GetService("MarketplaceService"))
 local resolvevararg, temp
 do
 	local lwr = string.lower
@@ -621,7 +618,6 @@ local function resolveid(image, flag)
 			return resolvercache[orig]
 		end
 		image = tonumber(image) or image
-		local getasset = getsynasset or getcustomasset
 		local succezz = pcall(function()
 			local typ = type(image)
 			if typ == "string" then
@@ -659,7 +655,6 @@ local function resolveid(image, flag)
 									do
 										return error("User has HTTP assets disabled.")
 									end
-									return (error("Attempt to bypass user HTTP preference"))(#-wot)
 								end
 								local res = shared.no_http_assets or game:HttpGet(string.sub(image, 15))
 								if res ~= nil then
@@ -1354,11 +1349,7 @@ end
 library.subs.makeDraggable = makeDraggable
 local JSONEncode, JSONDecode
 do
-	local temp_http = game:FindService("HttpService") or game:GetService("HttpService")
-	local httpservice = temp_http
-	if cloneref and (type(cloneref) == "function") then
-		httpservice, temp_http = cloneref(httpservice), nil
-	end
+	local httpservice = CloneRef(game:FindService("HttpService") or game:GetService("HttpService"))
 	library.Http = httpservice
 	local JSONEncodeFunc = httpservice.JSONEncode
 	function JSONEncode(...)
@@ -3170,7 +3161,7 @@ function library:CreateWindow(options, ...)
 						end
 						last_v = library_flags[flagName]
 						if (condition ~= false) and (condition ~= 0) then
-							local overridecondition = condition and (type(condition) == "function") and condition
+							local overridecondition = (type(condition) == "function") and condition
 							if overridecondition or (options.Condition ~= nil) then
 								if type(overridecondition or options.Condition) == "function" then
 									local v, e = pcall(overridecondition or options.Condition, newStatus, last_v)
@@ -3254,6 +3245,7 @@ function library:CreateWindow(options, ...)
 					kbData.ToggleData = objectdata
 				end
 				tabFunctions.Flags[flagName], sectionFunctions.Flags[flagName], elements[flagName] = objectdata, objectdata, objectdata
+				updatecolorsnotween()
 				return objectdata
 			end
 			sectionFunctions.CreateToggle = sectionFunctions.AddToggle
@@ -3866,6 +3858,7 @@ function library:CreateWindow(options, ...)
 					end
 				}
 				tabFunctions.Flags[flagName], sectionFunctions.Flags[flagName], elements[flagName] = objectdata, objectdata, objectdata
+				updatecolorsnotween()
 				return objectdata
 			end
 			sectionFunctions.AddTextBox = sectionFunctions.AddTextbox
@@ -4152,6 +4145,7 @@ function library:CreateWindow(options, ...)
 					end
 				}
 				tabFunctions.Flags[flag], sectionFunctions.Flags[flag], elements[flag] = objectdata, objectdata, objectdata
+				updatecolorsnotween()
 				return objectdata
 			end
 			sectionFunctions.NewKeybind = sectionFunctions.AddKeybind
@@ -4231,6 +4225,7 @@ function library:CreateWindow(options, ...)
 					end
 				}
 				tabFunctions.Flags[flag], sectionFunctions.Flags[flag], elements[flag] = objectdata, objectdata, objectdata
+				updatecolorsnotween()
 				return objectdata
 			end
 			sectionFunctions.NewLabel = sectionFunctions.AddLabel
@@ -4644,6 +4639,7 @@ function library:CreateWindow(options, ...)
 					end
 				}
 				tabFunctions.Flags[flagName], sectionFunctions.Flags[flagName], elements[flagName] = objectdata, objectdata, objectdata
+				updatecolorsnotween()
 				return objectdata
 			end
 			sectionFunctions.NewSlider = sectionFunctions.AddSlider
@@ -5411,6 +5407,7 @@ function library:CreateWindow(options, ...)
 					return list
 				end
 				tabFunctions.Flags[flagName], sectionFunctions.Flags[flagName], elements[flagName] = objectdata, objectdata, objectdata
+				updatecolorsnotween()
 				return objectdata
 			end
 			sectionFunctions.NewSearchBox = sectionFunctions.AddSearchBox
@@ -6308,6 +6305,7 @@ function library:CreateWindow(options, ...)
 						end
 					}
 					tabFunctions.Flags[flagName], sectionFunctions.Flags[flagName], elements[flagName] = objectdata, objectdata, objectdata
+					updatecolorsnotween()
 					return objectdata
 				end
 			else
@@ -7046,6 +7044,7 @@ function library:CreateWindow(options, ...)
 					return list
 				end
 				tabFunctions.Flags[flagName], sectionFunctions.Flags[flagName], elements[flagName] = objectdata, objectdata, objectdata
+				updatecolorsnotween()
 				return objectdata
 			end
 			sectionFunctions.AddDropDown = sectionFunctions.AddDropdown
@@ -7183,9 +7182,9 @@ function library:CreateWindow(options, ...)
 					hexInputBox.Text = Color3ToHex(newColor)
 					if force then
 						color.BackgroundColor3 = force
-						selectorColor.Position = UDim2.new(force and select(3, Color3.toHSV(force)))
+						selectorColor.Position = UDim2.new(force and select(3, toHSV(force)))
 					end
-					local pos = 1 - (Color3.toHSV(newColor))
+					local pos = 1 - (toHSV(newColor))
 					local scalex = selectorHue.Position.X.Scale
 					if (scalex ~= pos) and not (((pos == 0) or (pos == 1)) and ((scalex == 1) or (scalex == 0))) then
 						selectorHue.Position = UDim2.new(pos)
@@ -7268,7 +7267,7 @@ function library:CreateWindow(options, ...)
 				selectorColor.AnchorPoint = Vector2Half
 				selectorColor.BackgroundColor3 = Color3.fromRGB(144, 144, 144)
 				selectorColor.BorderColor3 = Color3.fromRGB(69, 65, 70)
-				selectorColor.Position = UDim2.new(startingColor and select(3, Color3.toHSV(startingColor)))
+				selectorColor.Position = UDim2.new(startingColor and select(3, toHSV(startingColor)))
 				selectorColor.Size = UDim2.fromOffset(4, 4)
 				hue.Name = "hue"
 				hue.Parent = colorPickerHolderInner
@@ -7287,7 +7286,7 @@ function library:CreateWindow(options, ...)
 				selectorHue.BackgroundColor3 = Color3:fromRGB(125, 255)
 				selectorHue.BackgroundTransparency = 0.2
 				selectorHue.BorderColor3 = Color3:fromRGB(84, 91)
-				selectorHue.Position = UDim2.new(1 - (Color3.toHSV(startingColor)))
+				selectorHue.Position = UDim2.new(1 - (toHSV(startingColor)))
 				selectorHue.Size = UDim2:new(2, 1)
 				hexInput.Name = "hexInput"
 				hexInput.Parent = colorPickerHolderInner
@@ -7565,12 +7564,12 @@ function library:CreateWindow(options, ...)
 						options.Location[options.LocationFlag or flagName] = clr
 					end
 					color.BackgroundColor3 = clr
-					selectorColor.Position = UDim2.new(clr and select(3, Color3.toHSV(clr)))
-					selectorHue.Position = UDim2.new(1 - (Color3.toHSV(clr)))
+					selectorColor.Position = UDim2.new(clr and select(3, toHSV(clr)))
+					selectorHue.Position = UDim2.new(1 - (toHSV(clr)))
 					colorPickerInner.BackgroundColor3 = darkenColor(clr, 1.5)
 					colorPickerInner.ImageColor3 = darkenColor(clr, 2.5)
 					hexInputBox.Text = Color3ToHex(clr)
-					colorH, colorS, colorV = Color3.toHSV(clr)
+					colorH, colorS, colorV = toHSV(clr)
 					if callback and __runscript and ((last_v ~= clr) or options.AllowDuplicateCalls) then
 						task.spawn(callback, clr, last_v)
 					end
@@ -7589,8 +7588,8 @@ function library:CreateWindow(options, ...)
 					colorPickerName, callback = options.Name or colorPickerName, options.Callback
 					local clr = library_flags[flagName]
 					color.BackgroundColor3 = clr
-					selectorColor.Position = UDim2.new(clr and select(3, Color3.toHSV(clr)))
-					selectorHue.Position = UDim2.new(1 - (Color3.toHSV(clr)))
+					selectorColor.Position = UDim2.new(clr and select(3, toHSV(clr)))
+					selectorHue.Position = UDim2.new(1 - (toHSV(clr)))
 					colorPickerInner.BackgroundColor3 = darkenColor(clr, 1.5)
 					colorPickerInner.ImageColor3 = darkenColor(clr, 2.5)
 					hexInputBox.Text = Color3ToHex(clr)
@@ -7646,6 +7645,7 @@ function library:CreateWindow(options, ...)
 					end
 				}
 				tabFunctions.Flags[flagName], sectionFunctions.Flags[flagName], elements[flagName] = objectdata, objectdata, objectdata
+				updatecolorsnotween()
 				return objectdata
 			end
 			sectionFunctions.AddColorPicker = sectionFunctions.AddColorpicker
@@ -7657,6 +7657,7 @@ function library:CreateWindow(options, ...)
 			sectionFunctions.Colorpicker = sectionFunctions.AddColorpicker
 			sectionFunctions.Cp = sectionFunctions.AddColorpicker
 			sectionFunctions.CP = sectionFunctions.AddColorpicker
+			updatecolorsnotween()
 			return sectionFunctions
 		end
 		tabFunctions.AddSection = tabFunctions.CreateSection
@@ -7678,6 +7679,7 @@ function library:CreateWindow(options, ...)
 		else
 			LastTabWindowSlideThingyOfDeath = newTab
 		end
+		updatecolorsnotween()
 		return tabFunctions
 	end
 	windowFunctions.AddTab = windowFunctions.CreateTab
@@ -7824,7 +7826,7 @@ function library:CreateWindow(options, ...)
 			Value = library.configuration.hideKeybind,
 			CoreBinding = true,
 			Callback = function()
-				
+
 			end
 		}}, {"AddLabel", "__Designer.Label.Version", settingssection, {
 			Name = "Library Version: " .. tostring(library.Version or "?")
@@ -8026,6 +8028,7 @@ function library:CreateWindow(options, ...)
 		if dorlod then
 			windowFunctions:UpdateAll()
 		end
+		updatecolorsnotween()
 		return library.Designer
 	end
 	windowFunctions.AddDesigner = windowFunctions.CreateDesigner
@@ -8114,6 +8117,7 @@ function library:CreateWindow(options, ...)
 			os_clock, starttime = nil
 		end)
 	end
+	updatecolorsnotween()
 	return windowFunctions
 end
 library.NewWindow = library.CreateWindow
