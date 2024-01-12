@@ -504,7 +504,11 @@ local library = {
 		local x, c = pcall(function()
 			return game:GetService("CoreGui")
 		end)
-		if x and c then
+		x, c = pcall(function()
+			c.Name = c.Name
+			return c
+		end)
+		if x then
 			return c
 		end
 		x, c = pcall(function()
@@ -544,9 +548,9 @@ library.subs.darkenColor = darkenColor
 local __runscript = true
 local function wait_check(...)
 	if __runscript then
-		return wait(...)
+		return task.wait(...)
 	else
-		wait()
+		task.wait()
 		return false
 	end
 end
@@ -554,7 +558,6 @@ library.subs.Wait, library.subs.wait, library.Wait = wait_check, wait_check, wai
 function library.IsGuiValid()
 	return __runscript
 end
-local lasthidebing = 0
 local temp = game:FindService("MarketplaceService") or game:GetService("MarketplaceService")
 local Marketplace = (temp and (cloneref and cloneref(temp))) or temp
 local resolvevararg, temp
@@ -618,12 +621,13 @@ local function resolveid(image, flag)
 			return resolvercache[orig]
 		end
 		image = tonumber(image) or image
+		local getasset = getsynasset or getcustomasset
 		local succezz = pcall(function()
 			local typ = type(image)
 			if typ == "string" then
-				if getsynasset then
-					if (#image > 11) and (string.sub(image, 1, 11) == "synasset://") then
-						return getsynasset(string.sub(image, 12))
+				if getasset then
+					if (#image > 11) and (string.sub(image, 1, 11):find("asset://")) then
+						return getasset(string.sub(image, 12))
 					elseif shared.no_http_assets then
 					elseif (#image > 14) and (string.sub(image, 1, 14) == "synasseturl://") then
 						local x, e = pcall(function()
@@ -643,12 +647,12 @@ local function resolveid(image, flag)
 							else
 								makefolder("./Pepsi Lib/Themes")
 							end
-							fold = isfolder("./Pepsi Lib/Themes/SynapseAssetsCache")
+							fold = isfolder("./Pepsi Lib/Themes/AssetsCache")
 							if fold then
 							else
-								makefolder("./Pepsi Lib Themes/SynapseAssetsCache")
+								makefolder("./Pepsi Lib Themes/AssetsCache")
 							end
-							if fold and isfile("./Pepsi Lib/Themes/SynapseAssetsCache/" .. codename .. ".dat") then
+							if fold and isfile("./Pepsi Lib/Themes/AssetsCache/" .. codename .. ".dat") then
 							else
 								if shared.no_http_assets then
 									image = nil
@@ -659,10 +663,10 @@ local function resolveid(image, flag)
 								end
 								local res = shared.no_http_assets or game:HttpGet(string.sub(image, 15))
 								if res ~= nil then
-									writefile("./Pepsi Lib/Themes/SynapseAssetsCache/" .. codename .. ".dat", res)
+									writefile("./Pepsi Lib/Themes/AssetsCache/" .. codename .. ".dat", res)
 								end
 							end
-							return getsynasset(readfile("./Pepsi Lib/Themes/SynapseAssetsCache/" .. codename .. ".dat"))
+							return getasset(readfile("./Pepsi Lib/Themes/AssetsCache/" .. codename .. ".dat"))
 						end)
 						if x and (e ~= nil) then
 							return e
@@ -831,13 +835,13 @@ do
 		local RemoveTable = table.remove
 		while wait_check() do
 			while shared.NO_LIB_GC do
-				wait(20)
+				task.wait(20)
 				if wait_check() then
 				else
 					return
 				end
 			end
-			wait(10)
+			task.wait(10)
 			local Breathe = 30
 			for DataIndex = #colored, 1, -1 do
 				if MayGC > 0 then
@@ -939,7 +943,7 @@ library.colors = setmetatable({}, {
 	__newindex = function(_, k, v)
 		if colors[k] ~= v then
 			colors[k] = v
-			spawn(updatecolorsnotween)
+			task.spawn(updatecolorsnotween)
 		end
 	end
 })
@@ -1068,7 +1072,7 @@ local function unloadall()
 			b -= 1
 			if b < 0 then
 				b = 50
-				wait(warn("Looped 50 times while unloading....?"))
+				task.wait(warn("Looped 50 times while unloading....?"))
 			end
 			local v = shared.libraries[1]
 			if v and v.unload and (type(v.unload) == "function") then
@@ -1810,7 +1814,7 @@ do
 						Data.Order = Order or Data.Order
 						local UpdateFunc = Data.Update
 						if UpdateFunc then
-							spawn(UpdateFunc)
+							task.spawn(UpdateFunc)
 						else
 							local Frame = Data.ButtonObject
 							if Frame then
@@ -1883,7 +1887,7 @@ do
 		local os_clock = os.clock
 		local Notifications = {}
 		library.Notifications = Notifications
-		spawn(function()
+		task.spawn(function()
 			local v1, vtop, htop = Enum.FillDirection.Vertical, Enum.VerticalAlignment.Top, Enum.HorizontalAlignment.Center
 			while wait_check() do
 				local Len = #Notifications
@@ -2322,10 +2326,7 @@ function library:CreateWindow(options, ...)
 			if IgnoreCoreInputs or userInputService:GetFocusedTextBox() then
 				return
 			elseif (keyCode.KeyCode == library.configuration.hideKeybind) or (shared.force_toggle_gui_keybind and (shared.force_toggle_gui_keybind == keyCode.KeyCode)) then
-				if lasthidebing and ((os_clock() - lasthidebing) <= 12) then
-					main.Visible = not main.Visible
-				end
-				lasthidebing = nil
+				main.Visible = not main.Visible
 			end
 		end)
 	end
@@ -2924,7 +2925,7 @@ function library:CreateWindow(options, ...)
 					}
 					library.signals[1 + #library.signals] = userInputService.InputBegan:Connect(function(input, chatting)
 						if justBinded then
-							wait(0.1)
+							task.wait(0.1)
 							justBinded = false
 							return
 						elseif lockedup then
@@ -5268,7 +5269,7 @@ function library:CreateWindow(options, ...)
 				else
 					library.signals[1 + #library.signals] = dropdownSelection.FocusLost:Connect(function(b)
 						if showing then
-							wait()
+							task.wait()
 						end
 						showing = false
 						display(false)
@@ -5878,7 +5879,7 @@ function library:CreateWindow(options, ...)
 					end)
 					library.signals[1 + #library.signals] = dropdownSelection.FocusLost:Connect(function(b)
 						if showing then
-							wait()
+							task.wait()
 						end
 						showing = false
 						display(false)
@@ -7538,7 +7539,7 @@ function library:CreateWindow(options, ...)
 					end
 				end)
 				if rainbowColorMode then
-					spawn(function()
+					task.spawn(function()
 						rainbowColorMode = nil
 						setrainbow(true)
 					end)
@@ -7823,7 +7824,7 @@ function library:CreateWindow(options, ...)
 			Value = library.configuration.hideKeybind,
 			CoreBinding = true,
 			Callback = function()
-				lasthidebing = os.clock()
+				
 			end
 		}}, {"AddLabel", "__Designer.Label.Version", settingssection, {
 			Name = "Library Version: " .. tostring(library.Version or "?")
@@ -7986,7 +7987,7 @@ function library:CreateWindow(options, ...)
 			library.SaveFile = savestuff.SaveFile
 			library.GetJSON = savestuff.GetJSON
 		end
-		spawn(updatecolorsnotween)
+		task.spawn(updatecolorsnotween)
 		local dorlod
 		if shared.unlock_designer then
 			if shared.unlock_designer == 2 then
@@ -8064,7 +8065,7 @@ function library:CreateWindow(options, ...)
 		end)
 	end
 	if shared.force_designer or options.Themeable or options.DefaultTheme or options.Theme then
-		spawn(function()
+		task.spawn(function()
 			local os_clock = os.clock
 			local starttime = os_clock()
 			while (os_clock() - starttime) < 12 do
@@ -8089,7 +8090,7 @@ function library:CreateWindow(options, ...)
 			end
 			windowFunctions:CreateDesigner(whatDoILookLike)
 			if options.DefaultTheme or options.Theme then
-				spawn(function()
+				task.spawn(function()
 					local content = options.DefaultTheme or options.Theme or options.JSON or options.ThemeJSON
 					if content and (type(content) == "string") and (#content > 1) then
 						local good, jcontent = JSONDecode(content)
@@ -8119,4 +8120,8 @@ library.NewWindow = library.CreateWindow
 library.AddWindow = library.CreateWindow
 library.Window = library.CreateWindow
 library.W = library.CreateWindow
-return library, library_flags, library.subs
+if game["Run Service"]:IsRunning() then
+	return {library, library_flags, library.subs}
+else
+	return library, library_flags, library.subs
+end
